@@ -6,7 +6,7 @@ export default function Cart() {
   const { cart } = useContext(CartContext);
 
   function sendToWhatsApp() {
-    const phone = "5585999999999"; // seu número
+    const phone = "55859293-9924"; // seu número
 
     const message = cart
       .map(item => `• ${item.name} - R$ ${item.price}`)
