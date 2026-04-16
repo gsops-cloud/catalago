@@ -18,6 +18,7 @@ function App() {
     return localStorage.getItem("catalogue-admin") === "true";
   });
   const [loginError, setLoginError] = useState("");
+  const [showLogin, setShowLogin] = useState(false);
 
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
@@ -36,6 +37,7 @@ function App() {
 
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
       setIsAdmin(true);
+      setShowLogin(false);
       setLoginError("");
       setUsername("");
       setPassword("");
@@ -47,7 +49,20 @@ function App() {
 
   function handleLogout() {
     setIsAdmin(false);
+    setShowLogin(false);
     setLoginError("");
+  }
+
+  function handleAdminClick() {
+    setShowLogin(true);
+    setLoginError("");
+  }
+
+  function handleCloseLogin() {
+    setShowLogin(false);
+    setLoginError("");
+    setUsername("");
+    setPassword("");
   }
 
   function updateProduct(id, changes) {
@@ -106,127 +121,173 @@ function App() {
 
   return (
     <CartProvider>
-      <div style={{ padding: 20, fontFamily: "Arial, sans-serif" }}>
-        <h1>Catálogo</h1>
+      <div className="app-container">
+        <header className="app-header">
+          <div>
+            <p className="eyebrow">Vitrine online</p>
+            <h1>Catálogo de produtos</h1>
+            <p className="hero-description">
+              Navegue pelos itens disponíveis e monte o pedido perfeito para seus clientes.
+            </p>
+          </div>
 
-        {!isAdmin && (
-          <form onSubmit={handleLogin} style={{ marginBottom: 20 }}>
-            <h2>Login de Administrador</h2>
-            <div style={{ display: "grid", gap: 10, maxWidth: 300 }}>
-              <label>
-                Usuário
-                <input
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  placeholder="admin"
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-              <label>
-                Senha
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="1234"
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-              <button type="submit" style={{ padding: 10 }}>Entrar como administrador</button>
-              {loginError && <p style={{ color: "red" }}>{loginError}</p>}
+          <div className="header-actions">
+            {isAdmin && <span className="admin-chip">Administrador conectado</span>}
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={isAdmin ? handleLogout : handleAdminClick}
+            >
+              {isAdmin ? "Sair" : "Administrador"}
+            </button>
+          </div>
+        </header>
+
+        {showLogin && !isAdmin && (
+          <div className="modal-overlay" onClick={handleCloseLogin}>
+            <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <p className="eyebrow">Área restrita</p>
+                  <h2>Login de administrador</h2>
+                </div>
+                <button
+                  type="button"
+                  className="close-button"
+                  onClick={handleCloseLogin}
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form className="admin-form" onSubmit={handleLogin}>
+                <label className="form-label">
+                  Usuário
+                  <input
+                    className="input-field"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder="admin"
+                  />
+                </label>
+                <label className="form-label">
+                  Senha
+                  <input
+                    className="input-field"
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="1234"
+                  />
+                </label>
+                {loginError && <p className="form-error">{loginError}</p>}
+                <button className="button button-primary" type="submit">
+                  Entrar
+                </button>
+              </form>
             </div>
-          </form>
+          </div>
         )}
 
         {isAdmin && (
-          <section style={{ marginBottom: 30 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <section className="admin-panel">
+            <div className="admin-panel-grid">
               <div>
-                <h2>Painel do Administrador</h2>
-                <p>Você pode alterar preço, imagem ou adicionar novos produtos.</p>
+                <h2>Painel do administrador</h2>
+                <p>
+                  Faça edições no catálogo, altere preços e adicione produtos com foto diretamente aqui.
+                </p>
               </div>
-              <button onClick={handleLogout} style={{ padding: 10 }}>Sair</button>
+              <button type="button" className="button button-secondary" onClick={handleLogout}>
+                Sair do administrador
+              </button>
             </div>
 
-            <div style={{ display: "grid", gap: 20, marginTop: 20 }}>
+            <div className="admin-grid">
               {products.map((product) => (
-                <div key={product.id} style={{ border: "1px solid #ccc", padding: 16, borderRadius: 8 }}>
+                <div key={product.id} className="admin-card">
                   <h3>{product.name}</h3>
                   <img
                     src={product.image}
                     alt={product.name}
-                    width="120"
-                    style={{ display: "block", marginBottom: 12, objectFit: "cover" }}
+                    className="admin-card-image"
                   />
-                  <label style={{ display: "block", marginBottom: 8 }}>
+                  <label className="form-label">
                     Preço (R$)
                     <input
+                      className="input-field"
                       type="number"
                       step="0.01"
                       value={product.price}
                       onChange={(event) => handleProductPriceChange(product.id, event.target.value)}
-                      style={{ width: "100%", padding: 8, marginTop: 4 }}
                     />
                   </label>
-                  <label style={{ display: "block" }}>
+                  <label className="form-label">
                     Nova foto
                     <input
+                      className="input-field"
                       type="file"
                       accept="image/*"
                       onChange={(event) => handleImageUpload(product.id, event.target.files?.[0])}
-                      style={{ display: "block", marginTop: 4 }}
                     />
                   </label>
                 </div>
               ))}
             </div>
 
-            <form onSubmit={addNewProduct} style={{ marginTop: 30, borderTop: "1px solid #ddd", paddingTop: 20, maxWidth: 500 }}>
+            <form className="admin-form" onSubmit={addNewProduct}>
               <h3>Adicionar novo produto</h3>
-              <div style={{ display: "grid", gap: 12 }}>
-                <label>
+              <div className="form-grid">
+                <label className="form-label">
                   Nome do produto
                   <input
+                    className="input-field"
                     value={newName}
                     onChange={(event) => setNewName(event.target.value)}
-                    style={{ width: "100%", padding: 8, marginTop: 4 }}
+                    placeholder="Ex: Mochila premium"
                   />
                 </label>
-                <label>
+                <label className="form-label">
                   Preço (R$)
                   <input
+                    className="input-field"
                     type="number"
                     step="0.01"
                     value={newPrice}
                     onChange={(event) => setNewPrice(event.target.value)}
-                    style={{ width: "100%", padding: 8, marginTop: 4 }}
                   />
                 </label>
-                <label>
+                <label className="form-label">
                   Foto do produto
                   <input
+                    className="input-field"
                     type="file"
                     accept="image/*"
                     onChange={(event) => handleNewImageChange(event.target.files?.[0])}
-                    style={{ display: "block", marginTop: 4 }}
                   />
                 </label>
                 {newImagePreview && (
-                  <img src={newImagePreview} alt="Prévia" width="120" style={{ display: "block" }} />
+                  <img src={newImagePreview} alt="Prévia" className="admin-card-image" />
                 )}
-                <button type="submit" style={{ padding: 10 }}>Adicionar produto</button>
               </div>
+              <button className="button button-primary" type="submit">
+                Adicionar produto
+              </button>
             </form>
           </section>
         )}
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-          {products.map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
-        </div>
-
-        <Cart />
+        <section className="products-section">
+          <div className="products-grid">
+            {products.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+          <aside className="cart-panel">
+            <Cart />
+          </aside>
+        </section>
       </div>
     </CartProvider>
   );

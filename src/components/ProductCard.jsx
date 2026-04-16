@@ -5,18 +5,18 @@ export default function ProductCard({ product }) {
   const { addToCart } = useContext(CartContext);
 
   return (
-    <div style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8, width: 180 }}>
-      <img
-        src={product.image}
-        alt={product.name}
-        width="150"
-        style={{ display: "block", marginBottom: 12, objectFit: "cover" }}
-      />
-      <h3>{product.name}</h3>
-      <p>R$ {product.price.toFixed(2)}</p>
-      <button onClick={() => addToCart(product)} style={{ padding: 8, width: "100%" }}>
-        Adicionar
-      </button>
+    <div className="product-card">
+      <div className="product-image">
+        <img src={product.image} alt={product.name} />
+      </div>
+
+      <div className="product-body">
+        <h3>{product.name}</h3>
+        <p className="price">R$ {product.price.toFixed(2)}</p>
+        <button type="button" className="button button-secondary" onClick={() => addToCart(product)}>
+          Adicionar
+        </button>
+      </div>
     </div>
   );
 }
