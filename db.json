@@ -1,0 +1,23 @@
+{
+  "products": [
+    {
+      "id": 1,
+      "name": "Camisa Polo",
+      "price": 79.9,
+      "image": "/images/polo.jpg"
+    },
+    {
+      "id": 2,
+      "name": "Calça Jeans",
+      "price": 129.9,
+      "image": "/images/jeans.jpg"
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "password": "1234",
+      "role": "admin"
+    }
+  ]
+}
