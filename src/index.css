@@ -117,6 +117,23 @@ button {
   color: #4338ca;
 }
 
+.price-badges {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, max-content));
+  gap: 8px;
+}
+
+.price-badges span {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.1);
+  color: #4338ca;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
 .products-section {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
