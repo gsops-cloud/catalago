@@ -3,13 +3,16 @@ import { CartProvider } from "./context/CartContext";
 import ProductCard from "./components/ProductCard";
 import Cart from "./components/Cart";
 import { products as initialProducts } from "./data/products";
-import * as api from "./services/api";
+import { uploadImageToFirebase } from "./services/firebase";
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "1234";
 
 function App() {
-  const [products, setProducts] = useState(initialProducts);
+  const [products, setProducts] = useState(() => {
+    const saved = localStorage.getItem("catalogue-products");
+    return saved ? JSON.parse(saved) : initialProducts;
+  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(() => {
@@ -23,6 +26,7 @@ function App() {
   const [newProductFile, setNewProductFile] = useState(null);
   const [newImagePreview, setNewImagePreview] = useState("");
   const [productError, setProductError] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const [discount10, setDiscount10] = useState(() => {
     const saved = localStorage.getItem("catalogue-discount10");
     return saved !== null ? Number(saved) : 1;
@@ -39,6 +43,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("catalogue-admin", isAdmin ? "true" : "false");
   }, [isAdmin]);
+
+  useEffect(() => {
+    localStorage.setItem("catalogue-products", JSON.stringify(products));
+  }, [products]);
 
   useEffect(() => {
     localStorage.setItem("catalogue-discount10", discount10);
@@ -67,15 +75,10 @@ function App() {
     loadProducts();
   }, []);
 
-  async function syncProductUpdate(id, changes) {
-    try {
-      const updatedProduct = await api.updateProduct(id, changes);
-      setProducts((prev) => prev.map((product) => (
-        product.id === id ? updatedProduct : product
-      )));
-    } catch (error) {
-      console.error("Erro ao atualizar produto:", error.message);
-    }
+  async function updateProduct(id, changes) {
+    setProducts((prev) => prev.map((product) => (
+      product.id === id ? { ...product, ...changes } : product
+    )));
   }
 
   function handleLogin(event) {
@@ -114,19 +117,25 @@ function App() {
   function handleProductPriceChange(id, value) {
     const price = Number(value);
     if (Number.isNaN(price)) return;
-    syncProductUpdate(id, { price });
+    updateProduct(id, { price });
   }
 
   function handleImageUpload(id, file) {
     if (!file) return;
 
+    setIsUploading(true);
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const { url } = await api.uploadImage(reader.result);
-        await syncProductUpdate(id, { image: url });
+        console.log("Enviando imagem para Firebase...");
+        const imageUrl = await uploadImageToFirebase(reader.result);
+        console.log("Imagem enviada com sucesso:", imageUrl);
+        await updateProduct(id, { image: imageUrl });
       } catch (error) {
         console.error("Erro ao enviar imagem:", error.message);
+        setProductError(`Erro ao enviar imagem: ${error.message}`);
+      } finally {
+        setIsUploading(false);
       }
     };
     reader.readAsDataURL(file);
@@ -156,26 +165,26 @@ function App() {
       return;
     }
 
+    setIsUploading(true);
     try {
       setProductError("");
       
-      console.log("Iniciando upload da imagem...");
-      const uploadResult = await api.uploadImage(newImagePreview);
-      console.log("Upload concluído:", uploadResult);
+      console.log("Iniciando upload da imagem para Firebase...");
+      const imageUrl = await uploadImageToFirebase(newImagePreview);
+      console.log("Upload concluído:", imageUrl);
       
       const nextId = Math.max(0, ...products.map((product) => product.id)) + 1;
       const newProduct = {
         id: nextId,
         name: newName,
         price: Number(newPrice),
-        image: uploadResult.url,
+        image: imageUrl,
       };
 
       console.log("Criando produto:", newProduct);
-      await api.createProduct(newProduct);
+      setProducts((prev) => [...prev, newProduct]);
       console.log("Produto criado com sucesso");
       
-      setProducts((prev) => [...prev, newProduct]);
       setNewName("");
       setNewPrice("");
       setNewProductFile(null);
@@ -183,7 +192,9 @@ function App() {
     } catch (error) {
       console.error("Erro ao adicionar produto:", error);
       const errorMsg = error.message || "Erro desconhecido";
-      setProductError(`Falha: ${errorMsg}. Verifique se o backend está rodando em http://localhost:4000`);
+      setProductError(`Falha: ${errorMsg}`);
+    } finally {
+      setIsUploading(false);
     }
   }
 
