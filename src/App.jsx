@@ -60,21 +60,6 @@ function App() {
     localStorage.setItem("catalogue-discount100", discount100);
   }, [discount100]);
 
-  useEffect(() => {
-    async function loadProducts() {
-      try {
-        const backendProducts = await api.getProducts();
-        if (backendProducts.length) {
-          setProducts(backendProducts);
-        }
-      } catch (error) {
-        console.warn("Não foi possível carregar os produtos do servidor:", error.message);
-      }
-    }
-
-    loadProducts();
-  }, []);
-
   async function updateProduct(id, changes) {
     setProducts((prev) => prev.map((product) => (
       product.id === id ? { ...product, ...changes } : product
