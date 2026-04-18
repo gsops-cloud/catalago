@@ -8,12 +8,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DB_FILE = path.join(__dirname, "db.json");
 const UPLOADS_DIR = path.join(__dirname, "uploads");
+const DIST_DIR = path.join(__dirname, "dist");
 const PORT = process.env.PORT || 4000;
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "15mb" }));
 app.use("/uploads", express.static(UPLOADS_DIR));
+
+// Serve o frontend React (arquivos estáticos)
+app.use(express.static(DIST_DIR));
 
 async function loadDb() {
   try {
@@ -70,7 +74,7 @@ app.post("/api/upload", async (req, res) => {
 
   await fs.writeFile(filePath, buffer);
 
-  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${fileName}`;
+  const imageUrl = `/uploads/${fileName}`;
   res.status(201).json({ url: imageUrl });
 });
 
@@ -139,8 +143,24 @@ app.post("/api/login", async (req, res) => {
   res.json({ username: user.username, role: user.role });
 });
 
+// Fallback para SPA - se requisição não matchear API, retorna index.html
+app.get("*", async (req, res) => {
+  const indexPath = path.join(DIST_DIR, "index.html");
+  try {
+    const html = await fs.readFile(indexPath, "utf-8");
+    res.setHeader("Content-Type", "text/html");
+    res.send(html);
+  } catch (error) {
+    res.status(500).json({ error: "Frontend não foi compilado. Execute: npm run build" });
+  }
+});
+
 await fs.mkdir(UPLOADS_DIR, { recursive: true });
+await fs.mkdir(DIST_DIR, { recursive: true }).catch(() => {});
 
 app.listen(PORT, () => {
-  console.log(`Backend rodando em http://localhost:${PORT}`);
+  console.log(`\n✅ Servidor rodando em http://localhost:${PORT}`);
+  console.log(`📁 Frontend: ${path.join(DIST_DIR, "index.html")}`);
+  console.log(`📸 Uploads: ${UPLOADS_DIR}`);
+  console.log(`📦 DB: ${DB_FILE}\n`);
 });

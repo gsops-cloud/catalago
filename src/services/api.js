@@ -1,16 +1,34 @@
-const apiBase = import.meta.env.DEV ? "http://localhost:4000" : "";
+// URLs relativas funcionam em ambos os casos:
+// - Em dev: vite.config.js faz proxy para localhost:4000
+// - Em prod (Hostinger): mesma origem (frontend + backend)
+const apiBase = "";
 
 async function request(path, options) {
-  const response = await fetch(`${apiBase}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  const url = `${apiBase}${path}`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Erro na API");
+    // Se a resposta não é JSON, mostra o erro real
+    const contentType = response.headers.get("content-type");
+    if (!contentType?.includes("application/json")) {
+      const text = await response.text();
+      throw new Error(`Resposta não é JSON: ${text.substring(0, 100)}`);
+    }
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || `Erro HTTP ${response.status}`);
+    }
+    return data;
+  } catch (error) {
+    console.error("Erro na requisição para:", url);
+    console.error("Detalhes:", error);
+    throw error;
   }
-  return data;
 }
 
 export async function getProducts() {

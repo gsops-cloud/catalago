@@ -2,22 +2,40 @@
 
 App React com administrador para gerenciar catálogo, preços, imagens e carrinho de compras.
 
+**Status**: ✅ Pronto para produção na Hostinger
+
 ---
 
-## ⚡ Rodar Localmente
+## ⚡ Quick Start (Local)
 
-### 1. Backend (Node.js)
+### 1. Instalar dependências
+```bash
+npm install
+```
+
+### 2. Terminal 1 - Backend
 ```bash
 npm run backend
 ```
-Vai rodari em `http://localhost:4000`
 
-### 2. Frontend (React + Vite)
-Em outro terminal:
+### 3. Terminal 2 - Frontend
 ```bash
 npm run dev
 ```
-Vai rodar em `http://localhost:5173`
+
+Acessa: `http://localhost:5173`
+
+---
+
+## 🚀 Deploy na Hostinger
+
+Veja: [DEPLOY_HOSTINGER.md](./DEPLOY_HOSTINGER.md)
+
+**Resumo rápido:**
+1. `npm run build` (cria `dist/`)
+2. Upload para `/public_html` via FTP
+3. Configura Node.js na Hostinger
+4. Pronto!
 
 ---
 
@@ -26,27 +44,11 @@ Vai rodar em `http://localhost:5173`
 - **Usuário**: `admin`
 - **Senha**: `1234`
 
-### O que você pode fazer:
-- Editar preços de produtos
-- Fazer upload de novas imagens
-- Adicionar novos produtos
-- Configurar descontos por quantidade
-
----
-
-## 🖼️ Armazenamento de Imagens
-
-As imagens são salvas em `uploads/` e compartilhadas entre dispositivos via backend.
-
-### Para usar na Hostinger:
-
-1. **Publicar o frontend**: Faz build e upload para `/public_html`
-2. **Publicar o backend**: Usa Node.js da Hostinger (ou roda local)
-3. **Fazer upload das imagens**: Usa FTP para `public_html/uploads`
-
-👉 **Veja**: [HOSTINGER_DEPLOYMENT.md](./HOSTINGER_DEPLOYMENT.md)
-
-👉 **Veja**: [FTP_UPLOAD_GUIDE.md](./FTP_UPLOAD_GUIDE.md)
+### Recursos
+- ✏️ Editar preços
+- 🖼️ Upload de imagens
+- ➕ Adicionar produtos
+- 💰 Configurar descontos por quantidade
 
 ---
 
@@ -54,8 +56,8 @@ As imagens são salvas em `uploads/` e compartilhadas entre dispositivos via bac
 
 ```
 catalago/
-├── src/
-│   ├── App.jsx              # App principal com admin
+├── src/                     # Código React
+│   ├── App.jsx
 │   ├── main.jsx
 │   ├── index.css
 │   ├── components/
@@ -64,19 +66,20 @@ catalago/
 │   ├── context/
 │   │   └── CartContext.jsx
 │   ├── services/
-│   │   └── api.js           # Chamadas HTTP para o backend
+│   │   └── api.js           # Chamadas para backend
 │   └── data/
-│       └── products.js      # Produtos iniciais
-├── server.js                # Backend Node/Express
-├── db.json                  # Banco de dados (produtos e usuários)
-├── uploads/                 # Pasta de imagens (criada automaticamente)
+│       └── products.js
+├── server.js                # Backend Node.js
+├── db.json                  # Banco de dados
+├── uploads/                 # Imagens (criado automaticamente)
+├── dist/                    # Build de produção (npm run build)
 ├── package.json
 └── vite.config.js
 ```
 
 ---
 
-## 🔌 API Backend
+## 🔌 API
 
 ### Produtos
 - `GET /api/products` - lista todos
@@ -90,57 +93,80 @@ catalago/
 
 ---
 
-## 🚀 Build para Produção
+## 🏗️ Como Funciona
+
+### Localmente (desenvolvimento)
+1. Frontend em `http://localhost:5173` (Vite dev server)
+2. Backend em `http://localhost:4000` (Node.js)
+3. Vite proxy: `/api` → `http://localhost:4000`
+
+### Em Produção (Hostinger)
+1. **Um único servidor Node.js** (`server.js`)
+2. Serve `/` com arquivos estáticos de `dist/`
+3. Fornece `/api/*` - backend
+4. Armazena imagens em `/uploads/`
+
+---
+
+## 🖼️ Imagens
+
+- Upload: base64 → servidor → arquivo em `/uploads/`
+- Acesso: `/uploads/img-timestamp-random.jpg`
+- Compartilhado: todos os dispositivos veem as mesmas imagens
+
+---
+
+## 📝 Scripts
 
 ```bash
-npm run build
-```
-
-Gera a pasta `dist/` para fazer upload à Hostinger.
-
----
-
-## 📝 Configuração (.env)
-
-Copia `.env.example` para `.env` e ajusta se necessário:
-
-```env
-PUBLIC_URL=https://seu-dominio.com
-FTP_HOST=62.72.62.191
-FTP_USER=seu_usuario_ftp
-FTP_PASSWORD=sua_senha_ftp
+npm run dev          # Dev local (Vite + React)
+npm run backend      # Backend local (Node.js)
+npm run build        # Build para produção
+npm run preview      # Preview do build
 ```
 
 ---
 
-## 💡 Dicas
+## 🔒 Segurança
 
-- Produtos são salvos em `db.json` (arquivo de texto)
-- Imagens são salvas em `uploads/` (como arquivos)
-- Cada dispositivo que acessar a URL verá os mesmos produtos e imagens
-- Faz backup do `db.json` periodicamente
+- Credenciais FTP em `.env` (não versionado)
+- Senhas simples (admin/1234) - idealmente mudar em produção
+- CORS habilitado - restrinja em produção se necessário
 
 ---
 
-## ⚠️ Troubleshooting
+## 🆘 Troubleshooting
 
-**"Botão adicionar produto não funciona"**
-- Verifica se o backend está rodando (`npm run backend`)
-- Verifica console do navegador (F12) para erros
+| Problema | Solução |
+|----------|---------|
+| "Erro ao adicionar produto" | Verifica se backend está rodando |
+| "Imagens não aparecem" | Verifica se `/uploads` tem permissão 755 |
+| "Servidor retorna HTML" | Frontend não foi compilado - execute `npm run build` |
+| "Port 4000 em uso" | Muda `PORT=5000 npm run backend` |
 
-**"Imagens não aparecem em outro dispositivo"**
-- Verifica se as imagens foram upadas para `/public_html/uploads` via FTP
-- Verifica a URL no console do navegador
+---
 
-**"Erro de conexão ao backend"**
-- Backend e frontend devem estar em redes conectadas
-- Se local: ambos devem estar rodando
-- Se Hostinger: backend deve estar ativo no Node.js da Hostinger
+## 📖 Documentação Completa
+
+- [DEPLOY_HOSTINGER.md](./DEPLOY_HOSTINGER.md) - Deploy passo a passo
+- [FTP_UPLOAD_GUIDE.md](./FTP_UPLOAD_GUIDE.md) - Como usar FileZilla
+- [DEBUG_CHECKLIST.md](./DEBUG_CHECKLIST.md) - Diagnosticar problemas
+- [ERROR_DOCTYPE.md](./ERROR_DOCTYPE.md) - Erros de JSON
+
+---
+
+## ✨ Features
+
+✅ Admin com autenticação  
+✅ CRUD de produtos  
+✅ Upload de imagens  
+✅ Carrinho de compras  
+✅ Descontos por quantidade  
+✅ Compartilhado entre dispositivos  
+✅ Pronto para Hostinger  
 
 ---
 
 ## 📞 Suporte
 
-Para dúvidas ou problemas, verifica os guias:
-- [HOSTINGER_DEPLOYMENT.md](./HOSTINGER_DEPLOYMENT.md)
-- [FTP_UPLOAD_GUIDE.md](./FTP_UPLOAD_GUIDE.md)
+Verifique os arquivos de documentação listados acima. Qualquer dúvida específica, abra console (F12) e veja mensagens de erro exatas.
