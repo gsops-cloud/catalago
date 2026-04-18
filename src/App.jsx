@@ -22,6 +22,7 @@ function App() {
   const [newPrice, setNewPrice] = useState("");
   const [newProductFile, setNewProductFile] = useState(null);
   const [newImagePreview, setNewImagePreview] = useState("");
+  const [productError, setProductError] = useState("");
   const [discount10, setDiscount10] = useState(() => {
     const saved = localStorage.getItem("catalogue-discount10");
     return saved !== null ? Number(saved) : 1;
@@ -132,8 +133,13 @@ function App() {
   }
 
   function handleNewImageChange(file) {
-    if (!file) return;
+    if (!file) {
+      setNewProductFile(null);
+      setNewImagePreview("");
+      return;
+    }
 
+    setProductError("");
     setNewProductFile(file);
     const reader = new FileReader();
     reader.onload = () => {
@@ -146,10 +152,12 @@ function App() {
     event.preventDefault();
 
     if (!newName || !newPrice || !newProductFile || !newImagePreview) {
+      setProductError("Preencha nome, preço e selecione uma imagem antes de adicionar.");
       return;
     }
 
     try {
+      setProductError("");
       const uploadResult = await api.uploadImage(newImagePreview);
       const nextId = Math.max(0, ...products.map((product) => product.id)) + 1;
       const newProduct = {
@@ -167,6 +175,7 @@ function App() {
       setNewImagePreview("");
     } catch (error) {
       console.error("Erro ao adicionar produto:", error.message);
+      setProductError("Falha ao adicionar produto. Verifique se o backend está rodando e tente novamente.");
     }
   }
 
@@ -361,6 +370,7 @@ function App() {
               <button className="button button-primary" type="submit">
                 Adicionar produto
               </button>
+              {productError && <p className="form-error">{productError}</p>}
             </form>
           </section>
         )}
