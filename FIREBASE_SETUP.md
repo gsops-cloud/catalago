@@ -16,7 +16,18 @@ Seu app agora usa **Firebase Storage** para armazenar imagens de forma segura na
 
 ---
 
-## 🔑 Passo 2: Pegar Credenciais do Projeto
+## �️ Passo 1.5: Ativar Cloud Storage
+
+1. No console Firebase, vai para **"Storage"** no menu lateral esquerdo
+2. Clica **"Get started"**
+3. Escolhe **"Start in test mode"** (para desenvolvimento - permite uploads sem autenticação)
+4. Clica **"Done"**
+
+Isso cria o bucket padrão necessário para o upload de imagens.
+
+---
+
+## �🔑 Passo 2: Pegar Credenciais do Projeto
 
 1. No console Firebase, procura pelo ícone de **engrenagem** (⚙️) no canto superior esquerdo
 2. Clica **"Project Settings"**
