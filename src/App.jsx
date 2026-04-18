@@ -23,6 +23,18 @@ function App() {
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newImagePreview, setNewImagePreview] = useState("");
+  const [discount10, setDiscount10] = useState(() => {
+    const saved = localStorage.getItem("catalogue-discount10");
+    return saved !== null ? Number(saved) : 1;
+  });
+  const [discount50, setDiscount50] = useState(() => {
+    const saved = localStorage.getItem("catalogue-discount50");
+    return saved !== null ? Number(saved) : 2;
+  });
+  const [discount100, setDiscount100] = useState(() => {
+    const saved = localStorage.getItem("catalogue-discount100");
+    return saved !== null ? Number(saved) : 3;
+  });
 
   useEffect(() => {
     localStorage.setItem("catalogue-admin", isAdmin ? "true" : "false");
@@ -31,6 +43,18 @@ function App() {
   useEffect(() => {
     localStorage.setItem("catalogue-products", JSON.stringify(products));
   }, [products]);
+
+  useEffect(() => {
+    localStorage.setItem("catalogue-discount10", discount10);
+  }, [discount10]);
+
+  useEffect(() => {
+    localStorage.setItem("catalogue-discount50", discount50);
+  }, [discount50]);
+
+  useEffect(() => {
+    localStorage.setItem("catalogue-discount100", discount100);
+  }, [discount100]);
 
   function handleLogin(event) {
     event.preventDefault();
@@ -236,6 +260,42 @@ function App() {
               ))}
             </div>
 
+            <div className="admin-form">
+              <h3>Descontos por quantidade</h3>
+              <div className="form-grid">
+                <label className="form-label">
+                  Acima de 10 peças (R$ de desconto)
+                  <input
+                    className="input-field"
+                    type="number"
+                    step="0.01"
+                    value={discount10}
+                    onChange={(event) => setDiscount10(Number(event.target.value))}
+                  />
+                </label>
+                <label className="form-label">
+                  Acima de 50 peças (R$ de desconto)
+                  <input
+                    className="input-field"
+                    type="number"
+                    step="0.01"
+                    value={discount50}
+                    onChange={(event) => setDiscount50(Number(event.target.value))}
+                  />
+                </label>
+                <label className="form-label">
+                  Acima de 100 peças (R$ de desconto)
+                  <input
+                    className="input-field"
+                    type="number"
+                    step="0.01"
+                    value={discount100}
+                    onChange={(event) => setDiscount100(Number(event.target.value))}
+                  />
+                </label>
+              </div>
+            </div>
+
             <form className="admin-form" onSubmit={addNewProduct}>
               <h3>Adicionar novo produto</h3>
               <div className="form-grid">
@@ -281,7 +341,11 @@ function App() {
         <section className="products-section">
           <div className="products-grid">
             {products.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard
+                key={p.id}
+                product={p}
+                discounts={{ discount10, discount50, discount100 }}
+              />
             ))}
           </div>
           <aside className="cart-panel">
