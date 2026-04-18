@@ -1,7 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { CartProvider } from "./context/CartContext";
 import ProductCard from "./components/ProductCard";
-import Cart from "./components/Cart";
 import { products as initialProducts } from "./data/products";
 import { uploadImageToFirebase } from "./services/firebase";
 
@@ -27,18 +25,6 @@ function App() {
   const [newImagePreview, setNewImagePreview] = useState("");
   const [productError, setProductError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-  const [discount10, setDiscount10] = useState(() => {
-    const saved = localStorage.getItem("catalogue-discount10");
-    return saved !== null ? Number(saved) : 1;
-  });
-  const [discount50, setDiscount50] = useState(() => {
-    const saved = localStorage.getItem("catalogue-discount50");
-    return saved !== null ? Number(saved) : 2;
-  });
-  const [discount100, setDiscount100] = useState(() => {
-    const saved = localStorage.getItem("catalogue-discount100");
-    return saved !== null ? Number(saved) : 3;
-  });
 
   useEffect(() => {
     localStorage.setItem("catalogue-admin", isAdmin ? "true" : "false");
@@ -48,22 +34,14 @@ function App() {
     localStorage.setItem("catalogue-products", JSON.stringify(products));
   }, [products]);
 
-  useEffect(() => {
-    localStorage.setItem("catalogue-discount10", discount10);
-  }, [discount10]);
-
-  useEffect(() => {
-    localStorage.setItem("catalogue-discount50", discount50);
-  }, [discount50]);
-
-  useEffect(() => {
-    localStorage.setItem("catalogue-discount100", discount100);
-  }, [discount100]);
-
   async function updateProduct(id, changes) {
     setProducts((prev) => prev.map((product) => (
       product.id === id ? { ...product, ...changes } : product
     )));
+  }
+
+  function deleteProduct(id) {
+    setProducts((prev) => prev.filter((product) => product.id !== id));
   }
 
   function handleLogin(event) {
@@ -184,14 +162,14 @@ function App() {
   }
 
   return (
-    <CartProvider>
+    <div className="app-container">
       <div className="app-container">
         <header className="app-header">
           <div>
             <p className="eyebrow">Vitrine online</p>
             <h1>Catálogo de produtos</h1>
             <p className="hero-description">
-              Navegue pelos itens disponíveis e monte o pedido perfeito para seus clientes.
+              Navegue pelos itens disponíveis.
             </p>
           </div>
 
@@ -296,44 +274,15 @@ function App() {
                       onChange={(event) => handleImageUpload(product.id, event.target.files?.[0])}
                     />
                   </label>
+                  <button
+                    type="button"
+                    className="button button-danger"
+                    onClick={() => deleteProduct(product.id)}
+                  >
+                    Excluir produto
+                  </button>
                 </div>
               ))}
-            </div>
-
-            <div className="admin-form">
-              <h3>Descontos por quantidade</h3>
-              <div className="form-grid">
-                <label className="form-label">
-                  Acima de 10 peças (R$ de desconto)
-                  <input
-                    className="input-field"
-                    type="number"
-                    step="0.01"
-                    value={discount10}
-                    onChange={(event) => setDiscount10(Number(event.target.value))}
-                  />
-                </label>
-                <label className="form-label">
-                  Acima de 50 peças (R$ de desconto)
-                  <input
-                    className="input-field"
-                    type="number"
-                    step="0.01"
-                    value={discount50}
-                    onChange={(event) => setDiscount50(Number(event.target.value))}
-                  />
-                </label>
-                <label className="form-label">
-                  Acima de 100 peças (R$ de desconto)
-                  <input
-                    className="input-field"
-                    type="number"
-                    step="0.01"
-                    value={discount100}
-                    onChange={(event) => setDiscount100(Number(event.target.value))}
-                  />
-                </label>
-              </div>
             </div>
 
             <form className="admin-form" onSubmit={addNewProduct}>
@@ -385,16 +334,12 @@ function App() {
               <ProductCard
                 key={p.id}
                 product={p}
-                discounts={{ discount10, discount50, discount100 }}
               />
             ))}
           </div>
-          <aside className="cart-panel">
-            <Cart />
-          </aside>
         </section>
       </div>
-    </CartProvider>
+    </div>
   );
 }
 
