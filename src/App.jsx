@@ -3,15 +3,13 @@ import { CartProvider } from "./context/CartContext";
 import ProductCard from "./components/ProductCard";
 import Cart from "./components/Cart";
 import { products as initialProducts } from "./data/products";
+import * as api from "./services/api";
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "1234";
 
 function App() {
-  const [products, setProducts] = useState(() => {
-    const saved = localStorage.getItem("catalogue-products");
-    return saved ? JSON.parse(saved) : initialProducts;
-  });
+  const [products, setProducts] = useState(initialProducts);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(() => {
@@ -22,6 +20,7 @@ function App() {
 
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
+  const [newProductFile, setNewProductFile] = useState(null);
   const [newImagePreview, setNewImagePreview] = useState("");
   const [discount10, setDiscount10] = useState(() => {
     const saved = localStorage.getItem("catalogue-discount10");
@@ -41,10 +40,6 @@ function App() {
   }, [isAdmin]);
 
   useEffect(() => {
-    localStorage.setItem("catalogue-products", JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
     localStorage.setItem("catalogue-discount10", discount10);
   }, [discount10]);
 
@@ -55,6 +50,32 @@ function App() {
   useEffect(() => {
     localStorage.setItem("catalogue-discount100", discount100);
   }, [discount100]);
+
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const backendProducts = await api.getProducts();
+        if (backendProducts.length) {
+          setProducts(backendProducts);
+        }
+      } catch (error) {
+        console.warn("Não foi possível carregar os produtos do servidor:", error.message);
+      }
+    }
+
+    loadProducts();
+  }, []);
+
+  async function syncProductUpdate(id, changes) {
+    try {
+      const updatedProduct = await api.updateProduct(id, changes);
+      setProducts((prev) => prev.map((product) => (
+        product.id === id ? updatedProduct : product
+      )));
+    } catch (error) {
+      console.error("Erro ao atualizar produto:", error.message);
+    }
+  }
 
   function handleLogin(event) {
     event.preventDefault();
@@ -89,24 +110,23 @@ function App() {
     setPassword("");
   }
 
-  function updateProduct(id, changes) {
-    setProducts((prev) => prev.map((product) => (
-      product.id === id ? { ...product, ...changes } : product
-    )));
-  }
-
   function handleProductPriceChange(id, value) {
     const price = Number(value);
     if (Number.isNaN(price)) return;
-    updateProduct(id, { price });
+    syncProductUpdate(id, { price });
   }
 
   function handleImageUpload(id, file) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
-      updateProduct(id, { image: reader.result });
+    reader.onload = async () => {
+      try {
+        const { url } = await api.uploadImage(reader.result);
+        await syncProductUpdate(id, { image: url });
+      } catch (error) {
+        console.error("Erro ao enviar imagem:", error.message);
+      }
     };
     reader.readAsDataURL(file);
   }
@@ -114,6 +134,7 @@ function App() {
   function handleNewImageChange(file) {
     if (!file) return;
 
+    setNewProductFile(file);
     const reader = new FileReader();
     reader.onload = () => {
       setNewImagePreview(reader.result);
@@ -121,26 +142,32 @@ function App() {
     reader.readAsDataURL(file);
   }
 
-  function addNewProduct(event) {
+  async function addNewProduct(event) {
     event.preventDefault();
 
-    if (!newName || !newPrice || !newImagePreview) {
+    if (!newName || !newPrice || !newProductFile || !newImagePreview) {
       return;
     }
 
-    const nextId = Math.max(...products.map((product) => product.id)) + 1;
-    setProducts((prev) => [
-      ...prev,
-      {
+    try {
+      const uploadResult = await api.uploadImage(newImagePreview);
+      const nextId = Math.max(0, ...products.map((product) => product.id)) + 1;
+      const newProduct = {
         id: nextId,
         name: newName,
         price: Number(newPrice),
-        image: newImagePreview,
-      },
-    ]);
-    setNewName("");
-    setNewPrice("");
-    setNewImagePreview("");
+        image: uploadResult.url,
+      };
+
+      await api.createProduct(newProduct);
+      setProducts((prev) => [...prev, newProduct]);
+      setNewName("");
+      setNewPrice("");
+      setNewProductFile(null);
+      setNewImagePreview("");
+    } catch (error) {
+      console.error("Erro ao adicionar produto:", error.message);
+    }
   }
 
   return (

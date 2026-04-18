@@ -24,11 +24,6 @@ export default function ProductCard({ product, discounts }) {
       <div className="product-body">
         <h3>{product.name}</h3>
         <p className="price">A partir de R$ {product.price.toFixed(2)}</p>
-        <div className="price-badges">
-          <span>10+ R$ {tier10}</span>
-          <span>50+ R$ {tier50}</span>
-          <span>100+ R$ {tier100}</span>
-        </div>
         <button type="button" className="button button-secondary" onClick={() => addToCart(product)}>
           Adicionar
         </button>

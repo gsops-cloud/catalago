@@ -7,11 +7,13 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DB_FILE = path.join(__dirname, "db.json");
+const UPLOADS_DIR = path.join(__dirname, "uploads");
 const PORT = process.env.PORT || 4000;
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "15mb" }));
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 async function loadDb() {
   try {
@@ -30,6 +32,47 @@ async function loadDb() {
 async function saveDb(data) {
   await fs.writeFile(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
+
+function imageTypeToExt(mime) {
+  switch (mime) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/svg+xml":
+      return "svg";
+    case "image/gif":
+      return "gif";
+    default:
+      return "png";
+  }
+}
+
+app.post("/api/upload", async (req, res) => {
+  const { imageDataUrl } = req.body;
+  if (!imageDataUrl) {
+    return res.status(400).json({ error: "imageDataUrl é obrigatório" });
+  }
+
+  const matches = imageDataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+  if (!matches) {
+    return res.status(400).json({ error: "Formato de imagem inválido" });
+  }
+
+  const mimeType = matches[1];
+  const base64Data = matches[2];
+  const extension = imageTypeToExt(mimeType);
+  const fileName = `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  const filePath = path.join(UPLOADS_DIR, fileName);
+  const buffer = Buffer.from(base64Data, "base64");
+
+  await fs.writeFile(filePath, buffer);
+
+  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${fileName}`;
+  res.status(201).json({ url: imageUrl });
+});
 
 app.get("/api/ping", (req, res) => {
   res.json({ status: "ok" });
@@ -95,6 +138,8 @@ app.post("/api/login", async (req, res) => {
 
   res.json({ username: user.username, role: user.role });
 });
+
+await fs.mkdir(UPLOADS_DIR, { recursive: true });
 
 app.listen(PORT, () => {
   console.log(`Backend rodando em http://localhost:${PORT}`);

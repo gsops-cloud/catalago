@@ -31,6 +31,13 @@ export async function createProduct(product) {
   });
 }
 
+export async function uploadImage(imageDataUrl) {
+  return request("/api/upload", {
+    method: "POST",
+    body: JSON.stringify({ imageDataUrl }),
+  });
+}
+
 export async function login(username, password) {
   return request("/api/login", {
     method: "POST",
