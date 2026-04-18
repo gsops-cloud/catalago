@@ -158,7 +158,11 @@ function App() {
 
     try {
       setProductError("");
+      
+      console.log("Iniciando upload da imagem...");
       const uploadResult = await api.uploadImage(newImagePreview);
+      console.log("Upload concluído:", uploadResult);
+      
       const nextId = Math.max(0, ...products.map((product) => product.id)) + 1;
       const newProduct = {
         id: nextId,
@@ -167,15 +171,19 @@ function App() {
         image: uploadResult.url,
       };
 
+      console.log("Criando produto:", newProduct);
       await api.createProduct(newProduct);
+      console.log("Produto criado com sucesso");
+      
       setProducts((prev) => [...prev, newProduct]);
       setNewName("");
       setNewPrice("");
       setNewProductFile(null);
       setNewImagePreview("");
     } catch (error) {
-      console.error("Erro ao adicionar produto:", error.message);
-      setProductError("Falha ao adicionar produto. Verifique se o backend está rodando e tente novamente.");
+      console.error("Erro ao adicionar produto:", error);
+      const errorMsg = error.message || "Erro desconhecido";
+      setProductError(`Falha: ${errorMsg}. Verifique se o backend está rodando em http://localhost:4000`);
     }
   }
 
