@@ -18,6 +18,12 @@
       "username": "admin",
       "password": "1234",
       "role": "admin"
+    },
+    {
+      "username": "nilsin",
+      "password": "nilsin123",
+      "role": "admin"
     }
+
   ]
 }
