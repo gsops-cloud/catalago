@@ -26,6 +26,10 @@ function App() {
   const [productError, setProductError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
+
   useEffect(() => {
     localStorage.setItem("catalogue-admin", isAdmin ? "true" : "false");
   }, [isAdmin]);
@@ -33,6 +37,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("catalogue-products", JSON.stringify(products));
   }, [products]);
+
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   async function updateProduct(id, changes) {
     setProducts((prev) => prev.map((product) => (
@@ -42,6 +50,24 @@ function App() {
 
   function deleteProduct(id) {
     setProducts((prev) => prev.filter((product) => product.id !== id));
+  }
+
+  function confirmDeleteProduct(id) {
+    setProductToDelete(id);
+    setShowDeleteConfirm(true);
+  }
+
+  function handleDeleteConfirm() {
+    if (productToDelete) {
+      deleteProduct(productToDelete);
+      setShowDeleteConfirm(false);
+      setProductToDelete(null);
+    }
+  }
+
+  function handleDeleteCancel() {
+    setShowDeleteConfirm(false);
+    setProductToDelete(null);
   }
 
   function handleLogin(event) {
@@ -174,6 +200,15 @@ function App() {
           </div>
 
           <div className="header-actions">
+            <div className="search-container">
+              <input
+                type="text"
+                placeholder="Buscar produtos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="search-input"
+              />
+            </div>
             {isAdmin && <span className="admin-chip">Administrador conectado</span>}
             <button
               type="button"
@@ -232,6 +267,36 @@ function App() {
           </div>
         )}
 
+        {showDeleteConfirm && (
+          <div className="modal-overlay" onClick={handleDeleteCancel}>
+            <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <p className="eyebrow">Confirmação</p>
+                  <h2>Excluir produto</h2>
+                </div>
+                <button
+                  type="button"
+                  className="close-button"
+                  onClick={handleDeleteCancel}
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+              </div>
+              <p>Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.</p>
+              <div className="modal-actions">
+                <button className="button button-secondary" onClick={handleDeleteCancel}>
+                  Cancelar
+                </button>
+                <button className="button button-danger" onClick={handleDeleteConfirm}>
+                  Excluir
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isAdmin && (
           <section className="admin-panel">
             <div className="admin-panel-grid">
@@ -277,7 +342,7 @@ function App() {
                   <button
                     type="button"
                     className="button button-danger"
-                    onClick={() => deleteProduct(product.id)}
+                    onClick={() => confirmDeleteProduct(product.id)}
                   >
                     Excluir produto
                   </button>
@@ -330,12 +395,15 @@ function App() {
 
         <section className="products-section">
           <div className="products-grid">
-            {products.map((p) => (
+            {filteredProducts.map((p) => (
               <ProductCard
                 key={p.id}
                 product={p}
               />
             ))}
+            {filteredProducts.length === 0 && searchTerm && (
+              <p className="no-results">Nenhum produto encontrado para "{searchTerm}"</p>
+            )}
           </div>
         </section>
       </div>
