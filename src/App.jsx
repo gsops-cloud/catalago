@@ -1,9 +1,7 @@
 ﻿import { useState, useEffect } from "react";
 import ProductCard from "./components/ProductCard";
-import { getProducts, updateProduct as apiUpdateProduct, createProduct, deleteProduct as apiDeleteProduct, uploadImage } from "./services/api";
+import { getProducts, updateProduct as apiUpdateProduct, createProduct, deleteProduct as apiDeleteProduct, uploadImage, login as apiLogin } from "./services/api";
 
-const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD = "1234";
 const AVAILABLE_SIZES = ["PP", "P", "M", "G", "GG"];
 
 function App() {
@@ -96,16 +94,22 @@ function App() {
   function handleLogin(event) {
     event.preventDefault();
 
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      setIsAdmin(true);
-      setShowLogin(false);
-      setLoginError("");
-      setUsername("");
-      setPassword("");
-      return;
-    }
-
-    setLoginError("Usuário ou senha inválidos.");
+    (async () => {
+      try {
+        const result = await apiLogin(username, password);
+        if (result?.role !== "admin") {
+          setLoginError("Usuário sem permissão de administrador.");
+          return;
+        }
+        setIsAdmin(true);
+        setShowLogin(false);
+        setLoginError("");
+        setUsername("");
+        setPassword("");
+      } catch (error) {
+        setLoginError(error?.message || "Usuário ou senha inválidos.");
+      }
+    })();
   }
 
   function handleLogout() {
