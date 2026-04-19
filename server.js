@@ -30,7 +30,8 @@ function initFirebaseAdmin() {
 
   const storageBucket =
     process.env.FIREBASE_STORAGE_BUCKET ||
-    `${serviceAccount.project_id}.appspot.com`;
+    // Alguns projetos novos do Firebase usam bucket padrão em *.firebasestorage.app
+    `${serviceAccount.project_id}.firebasestorage.app`;
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -117,7 +118,7 @@ app.get("/api/products", async (req, res) => {
     res.json(items);
   } catch (error) {
     console.error("Falha ao listar produtos:", error);
-    res.status(500).json({ error: "Erro ao listar produtos" });
+    res.status(500).json({ error: error.message || "Erro ao listar produtos" });
   }
 });
 
