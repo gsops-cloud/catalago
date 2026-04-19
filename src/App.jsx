@@ -7,15 +7,10 @@ const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "1234";
 
 function App() {
-  const [products, setProducts] = useState(() => {
-    const saved = localStorage.getItem("catalogue-products");
-    return saved ? JSON.parse(saved) : initialProducts;
-  });
+  const [products, setProducts] = useState([]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [isAdmin, setIsAdmin] = useState(() => {
-    return localStorage.getItem("catalogue-admin") === "true";
-  });
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [showLogin, setShowLogin] = useState(false);
 
