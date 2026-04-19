@@ -46,9 +46,38 @@ function firestore() {
   return getFirestore(admin.app(), databaseId);
 }
 
-function storageBucket() {
+let resolvedBucketPromise = null;
+async function resolveStorageBucket() {
   initFirebaseAdmin();
-  return admin.storage().bucket();
+
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const serviceAccount = raw ? JSON.parse(raw) : null;
+  const projectId = serviceAccount?.project_id;
+
+  const candidates = [
+    process.env.FIREBASE_STORAGE_BUCKET,
+    projectId ? `${projectId}.appspot.com` : null,
+    projectId ? `${projectId}.firebasestorage.app` : null,
+  ].filter(Boolean);
+
+  const storage = admin.storage();
+  for (const name of candidates) {
+    try {
+      const bucket = storage.bucket(name);
+      const [exists] = await bucket.exists();
+      if (exists) return bucket;
+    } catch {
+      // ignora e tenta o próximo
+    }
+  }
+
+  // fallback: usa o default do initializeApp (vai manter a mensagem original)
+  return storage.bucket();
+}
+
+async function storageBucket() {
+  if (!resolvedBucketPromise) resolvedBucketPromise = resolveStorageBucket();
+  return await resolvedBucketPromise;
 }
 
 function imageTypeToExt(mime) {
@@ -86,7 +115,7 @@ app.post("/api/upload", async (req, res) => {
   const buffer = Buffer.from(base64Data, "base64");
 
   try {
-    const bucket = storageBucket();
+    const bucket = await storageBucket();
     const objectPath = `catalog-images/${fileName}`;
     const file = bucket.file(objectPath);
 
@@ -104,7 +133,10 @@ app.post("/api/upload", async (req, res) => {
     res.status(201).json({ url: signedUrl });
   } catch (error) {
     console.error("Falha no upload Firebase Storage:", error);
-    res.status(500).json({ error: error.message || "Falha no upload" });
+    res.status(500).json({
+      error: error.message || "Falha no upload",
+      bucket: process.env.FIREBASE_STORAGE_BUCKET || "(auto)",
+    });
   }
 });
 
