@@ -1,7 +1,6 @@
 ﻿import { useState, useEffect } from "react";
 import ProductCard from "./components/ProductCard";
-import { getProducts, updateProduct as apiUpdateProduct, createProduct, deleteProduct as apiDeleteProduct } from "./services/api";
-import { uploadImageToFirebase } from "./services/firebase";
+import { getProducts, updateProduct as apiUpdateProduct, createProduct, deleteProduct as apiDeleteProduct, uploadImage } from "./services/api";
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "1234";
@@ -138,7 +137,9 @@ function App() {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const imageUrl = await uploadImageToFirebase(reader.result);
+        const result = await uploadImage(reader.result);
+        const imageUrl = result?.url;
+        if (!imageUrl) throw new Error("Servidor não retornou a URL da imagem");
         await updateProduct(id, { image: imageUrl });
       } catch (error) {
         console.error("Erro ao enviar imagem:", error.message);
@@ -178,7 +179,9 @@ function App() {
     try {
       setProductError("");
       
-      const imageUrl = await uploadImageToFirebase(newImagePreview);
+      const uploadResult = await uploadImage(newImagePreview);
+      const imageUrl = uploadResult?.url;
+      if (!imageUrl) throw new Error("Servidor não retornou a URL da imagem");
       
       const nextId = Math.max(0, ...products.map((product) => product.id)) + 1;
       const newProduct = {
