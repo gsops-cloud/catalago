@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from "react";
 import ProductCard from "./components/ProductCard";
-import { products as initialProducts } from "./data/products";
+import { getProducts, updateProduct as apiUpdateProduct, createProduct, deleteProduct as apiDeleteProduct } from "./services/api";
 import { uploadImageToFirebase } from "./services/firebase";
 
 const ADMIN_USERNAME = "admin";
@@ -26,25 +26,52 @@ function App() {
   const [productToDelete, setProductToDelete] = useState(null);
 
   useEffect(() => {
-    localStorage.setItem("catalogue-admin", isAdmin ? "true" : "false");
-  }, [isAdmin]);
-
-  useEffect(() => {
-    localStorage.setItem("catalogue-products", JSON.stringify(products));
-  }, [products]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getProducts();
+        if (!cancelled) setProducts(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Falha ao carregar produtos do servidor:", error);
+        if (!cancelled) setProducts([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   async function updateProduct(id, changes) {
-    setProducts((prev) => prev.map((product) => (
-      product.id === id ? { ...product, ...changes } : product
-    )));
+    setProducts((prev) =>
+      prev.map((product) => (product.id === id ? { ...product, ...changes } : product))
+    );
+    try {
+      const saved = await apiUpdateProduct(id, changes);
+      setProducts((prev) =>
+        prev.map((product) => (product.id === id ? { ...product, ...saved } : product))
+      );
+    } catch (error) {
+      console.error("Falha ao salvar alterações no servidor:", error);
+      setProductError(`Falha ao salvar no servidor: ${error.message}`);
+      const refreshed = await getProducts().catch(() => null);
+      if (Array.isArray(refreshed)) setProducts(refreshed);
+    }
   }
 
-  function deleteProduct(id) {
+  async function deleteProduct(id) {
     setProducts((prev) => prev.filter((product) => product.id !== id));
+    try {
+      await apiDeleteProduct(id);
+    } catch (error) {
+      console.error("Falha ao excluir no servidor:", error);
+      setProductError(`Falha ao excluir no servidor: ${error.message}`);
+      const refreshed = await getProducts().catch(() => null);
+      if (Array.isArray(refreshed)) setProducts(refreshed);
+    }
   }
 
   function confirmDeleteProduct(id) {
@@ -54,7 +81,7 @@ function App() {
 
   function handleDeleteConfirm() {
     if (productToDelete) {
-      deleteProduct(productToDelete);
+      void deleteProduct(productToDelete);
       setShowDeleteConfirm(false);
       setProductToDelete(null);
     }
@@ -111,9 +138,7 @@ function App() {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        console.log("Enviando imagem para Firebase...");
         const imageUrl = await uploadImageToFirebase(reader.result);
-        console.log("Imagem enviada com sucesso:", imageUrl);
         await updateProduct(id, { image: imageUrl });
       } catch (error) {
         console.error("Erro ao enviar imagem:", error.message);
@@ -153,9 +178,7 @@ function App() {
     try {
       setProductError("");
       
-      console.log("Iniciando upload da imagem para Firebase...");
       const imageUrl = await uploadImageToFirebase(newImagePreview);
-      console.log("Upload concluído:", imageUrl);
       
       const nextId = Math.max(0, ...products.map((product) => product.id)) + 1;
       const newProduct = {
@@ -165,9 +188,8 @@ function App() {
         image: imageUrl,
       };
 
-      console.log("Criando produto:", newProduct);
-      setProducts((prev) => [...prev, newProduct]);
-      console.log("Produto criado com sucesso");
+      const created = await createProduct(newProduct);
+      setProducts((prev) => [...prev, created]);
       
       setNewName("");
       setNewPrice("");

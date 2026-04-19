@@ -42,6 +42,12 @@ export async function updateProduct(id, changes) {
   });
 }
 
+export async function deleteProduct(id) {
+  return request(`/api/products/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function createProduct(product) {
   return request("/api/products", {
     method: "POST",

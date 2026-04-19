@@ -108,6 +108,19 @@ app.put("/api/products/:id", async (req, res) => {
   res.json(db.products[index]);
 });
 
+app.delete("/api/products/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const db = await loadDb();
+  const index = db.products.findIndex((item) => item.id === id);
+  if (index === -1) {
+    return res.status(404).json({ error: "Produto não encontrado" });
+  }
+
+  const removed = db.products.splice(index, 1)[0];
+  await saveDb(db);
+  res.json(removed);
+});
+
 app.get("/api/users", async (req, res) => {
   const db = await loadDb();
   res.json(db.users.map((user) => ({ username: user.username, role: user.role })));
