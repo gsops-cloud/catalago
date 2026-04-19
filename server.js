@@ -3,6 +3,7 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,7 +42,8 @@ function initFirebaseAdmin() {
 
 function firestore() {
   initFirebaseAdmin();
-  return admin.firestore();
+  const databaseId = process.env.FIRESTORE_DATABASE_ID || "(default)";
+  return getFirestore(admin.app(), databaseId);
 }
 
 function storageBucket() {
