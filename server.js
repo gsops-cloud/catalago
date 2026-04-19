@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import mysql from "mysql2/promise";
+import admin from "firebase-admin";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,47 +22,30 @@ function requireEnv(name) {
   return v;
 }
 
-const dbPool = mysql.createPool({
-  host: process.env.MYSQL_HOST || process.env.DB_HOST,
-  port: Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306),
-  user: process.env.MYSQL_USER || process.env.DB_USER,
-  password: process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD,
-  database: process.env.MYSQL_DATABASE || process.env.DB_NAME,
-  connectionLimit: 5,
-  enableKeepAlive: true,
-});
+function initFirebaseAdmin() {
+  if (admin.apps.length > 0) return;
 
-async function initDb() {
-  requireEnv("MYSQL_HOST");
-  requireEnv("MYSQL_USER");
-  requireEnv("MYSQL_PASSWORD");
-  requireEnv("MYSQL_DATABASE");
+  const raw = requireEnv("FIREBASE_SERVICE_ACCOUNT_JSON");
+  const serviceAccount = JSON.parse(raw);
 
-  await dbPool.query(`
-    CREATE TABLE IF NOT EXISTS images (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      mime VARCHAR(100) NOT NULL,
-      data LONGBLOB NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-  `);
+  const storageBucket =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    `${serviceAccount.project_id}.appspot.com`;
 
-  await dbPool.query(`
-    CREATE TABLE IF NOT EXISTS products (
-      id INT PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      price DECIMAL(10,2) NOT NULL,
-      image TEXT
-    ) ENGINE=InnoDB;
-  `);
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    storageBucket,
+  });
+}
 
-  await dbPool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      username VARCHAR(120) PRIMARY KEY,
-      password VARCHAR(255) NOT NULL,
-      role VARCHAR(30) NOT NULL
-    ) ENGINE=InnoDB;
-  `);
+function firestore() {
+  initFirebaseAdmin();
+  return admin.firestore();
+}
+
+function storageBucket() {
+  initFirebaseAdmin();
+  return admin.storage().bucket();
 }
 
 function imageTypeToExt(mime) {
@@ -96,39 +79,29 @@ app.post("/api/upload", async (req, res) => {
   const mimeType = matches[1];
   const base64Data = matches[2];
   const extension = imageTypeToExt(mimeType);
+  const fileName = `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
   const buffer = Buffer.from(base64Data, "base64");
 
   try {
-    const [result] = await dbPool.execute(
-      "INSERT INTO images (mime, data) VALUES (?, ?)",
-      [mimeType, buffer]
-    );
-    const id = result.insertId;
-    res.status(201).json({ url: `/api/images/${id}` });
+    const bucket = storageBucket();
+    const objectPath = `catalog-images/${fileName}`;
+    const file = bucket.file(objectPath);
+
+    await file.save(buffer, {
+      contentType: mimeType,
+      resumable: false,
+      metadata: { cacheControl: "public, max-age=31536000, immutable" },
+    });
+
+    const [signedUrl] = await file.getSignedUrl({
+      action: "read",
+      expires: "2500-01-01",
+    });
+
+    res.status(201).json({ url: signedUrl });
   } catch (error) {
-    console.error("Falha no upload MySQL:", error);
+    console.error("Falha no upload Firebase Storage:", error);
     res.status(500).json({ error: error.message || "Falha no upload" });
-  }
-});
-
-app.get("/api/images/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
-
-  try {
-    const [rows] = await dbPool.execute(
-      "SELECT mime, data FROM images WHERE id = ?",
-      [id]
-    );
-    const row = rows[0];
-    if (!row) return res.status(404).json({ error: "Imagem não encontrada" });
-
-    res.setHeader("Content-Type", row.mime);
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    res.send(row.data);
-  } catch (error) {
-    console.error("Falha ao buscar imagem:", error);
-    res.status(500).json({ error: "Erro ao buscar imagem" });
   }
 });
 
@@ -138,10 +111,10 @@ app.get("/api/ping", (req, res) => {
 
 app.get("/api/products", async (req, res) => {
   try {
-    const [rows] = await dbPool.execute(
-      "SELECT id, name, price, image FROM products ORDER BY id ASC"
-    );
-    res.json(rows);
+    const db = firestore();
+    const snapshot = await db.collection("products").orderBy("id", "asc").get();
+    const items = snapshot.docs.map((doc) => doc.data());
+    res.json(items);
   } catch (error) {
     console.error("Falha ao listar produtos:", error);
     res.status(500).json({ error: "Erro ao listar produtos" });
@@ -155,11 +128,15 @@ app.post("/api/products", async (req, res) => {
   }
 
   try {
-    await dbPool.execute(
-      "INSERT INTO products (id, name, price, image) VALUES (?, ?, ?, ?)",
-      [Number(product.id), product.name, Number(product.price), product.image || null]
-    );
-    res.status(201).json({ ...product, id: Number(product.id), price: Number(product.price) });
+    const db = firestore();
+    const next = {
+      id: Number(product.id),
+      name: String(product.name),
+      price: Number(product.price),
+      image: product.image || "",
+    };
+    await db.collection("products").doc(String(next.id)).set(next);
+    res.status(201).json(next);
   } catch (error) {
     console.error("Falha ao criar produto:", error);
     res.status(500).json({ error: "Erro ao criar produto" });
@@ -172,24 +149,22 @@ app.put("/api/products/:id", async (req, res) => {
   if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
 
   try {
-    const [existingRows] = await dbPool.execute(
-      "SELECT id, name, price, image FROM products WHERE id = ?",
-      [id]
-    );
-    const existing = existingRows[0];
-    if (!existing) return res.status(404).json({ error: "Produto não encontrado" });
+    const db = firestore();
+    const ref = db.collection("products").doc(String(id));
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "Produto não encontrado" });
 
+    const existing = snap.data();
     const next = {
       ...existing,
       ...changes,
       id,
-      price: changes?.price !== undefined ? Number(changes.price) : Number(existing.price),
     };
+    if (next.price !== undefined) next.price = Number(next.price);
+    if (next.name !== undefined) next.name = String(next.name);
+    if (next.image === undefined) next.image = existing.image || "";
 
-    await dbPool.execute(
-      "UPDATE products SET name = ?, price = ?, image = ? WHERE id = ?",
-      [next.name, next.price, next.image || null, id]
-    );
+    await ref.set(next);
     res.json(next);
   } catch (error) {
     console.error("Falha ao atualizar produto:", error);
@@ -202,14 +177,12 @@ app.delete("/api/products/:id", async (req, res) => {
   if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
 
   try {
-    const [existingRows] = await dbPool.execute(
-      "SELECT id, name, price, image FROM products WHERE id = ?",
-      [id]
-    );
-    const existing = existingRows[0];
-    if (!existing) return res.status(404).json({ error: "Produto não encontrado" });
-
-    await dbPool.execute("DELETE FROM products WHERE id = ?", [id]);
+    const db = firestore();
+    const ref = db.collection("products").doc(String(id));
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "Produto não encontrado" });
+    const existing = snap.data();
+    await ref.delete();
     res.json(existing);
   } catch (error) {
     console.error("Falha ao excluir produto:", error);
@@ -219,10 +192,13 @@ app.delete("/api/products/:id", async (req, res) => {
 
 app.get("/api/users", async (req, res) => {
   try {
-    const [rows] = await dbPool.execute(
-      "SELECT username, role FROM users ORDER BY username ASC"
-    );
-    res.json(rows);
+    const db = firestore();
+    const snapshot = await db.collection("users").orderBy("username", "asc").get();
+    const items = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return { username: data.username, role: data.role };
+    });
+    res.json(items);
   } catch (error) {
     console.error("Falha ao listar usuários:", error);
     res.status(500).json({ error: "Erro ao listar usuários" });
@@ -236,17 +212,14 @@ app.post("/api/users", async (req, res) => {
   }
 
   try {
-    const [existingRows] = await dbPool.execute(
-      "SELECT username FROM users WHERE username = ?",
-      [username]
-    );
-    if (existingRows[0]) return res.status(409).json({ error: "Usuário já existe" });
+    const db = firestore();
+    const ref = db.collection("users").doc(String(username));
+    const snap = await ref.get();
+    if (snap.exists) return res.status(409).json({ error: "Usuário já existe" });
 
-    await dbPool.execute(
-      "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-      [username, password, role]
-    );
-    res.status(201).json({ username, role });
+    const user = { username: String(username), password: String(password), role: String(role) };
+    await ref.set(user);
+    res.status(201).json({ username: user.username, role: user.role });
   } catch (error) {
     console.error("Falha ao criar usuário:", error);
     res.status(500).json({ error: "Erro ao criar usuário" });
@@ -256,11 +229,9 @@ app.post("/api/users", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
   try {
-    const [rows] = await dbPool.execute(
-      "SELECT username, password, role FROM users WHERE username = ?",
-      [username]
-    );
-    const user = rows[0];
+    const db = firestore();
+    const snap = await db.collection("users").doc(String(username)).get();
+    const user = snap.exists ? snap.data() : null;
     if (!user || user.password !== password) {
       return res.status(401).json({ error: "Usuário ou senha inválidos" });
     }
@@ -284,11 +255,10 @@ app.get("*", async (req, res) => {
   }
 });
 
-await initDb();
 await (await import("fs/promises")).mkdir(DIST_DIR, { recursive: true }).catch(() => {});
 
 app.listen(PORT, () => {
   console.log(`\n✅ Servidor rodando em http://localhost:${PORT}`);
   console.log(`📁 Frontend: ${path.join(DIST_DIR, "index.html")}`);
-  console.log(`🗄️  MySQL: ${process.env.MYSQL_HOST}/${process.env.MYSQL_DATABASE}\n`);
+  console.log(`🔥 Firebase Admin: pronto\n`);
 });
