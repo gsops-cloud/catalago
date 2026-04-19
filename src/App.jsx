@@ -4,6 +4,65 @@ import { getProducts, updateProduct as apiUpdateProduct, createProduct, deletePr
 
 const AVAILABLE_SIZES = ["PP", "P", "M", "G", "GG"];
 
+const PRICE_TIER_PRESETS = [
+  { minQty: 10, label: "A partir de 10 peças" },
+  { minQty: 50, label: "A partir de 50 peças" },
+  { minQty: 100, label: "A partir de 100 peças" },
+];
+
+function defaultPriceTiers() {
+  return PRICE_TIER_PRESETS.map((preset) => ({
+    minQty: preset.minQty,
+    label: preset.label,
+    amount: "",
+    showOnStorefront: false,
+  }));
+}
+
+function normalizePriceTiers(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) return defaultPriceTiers();
+  const byQty = new Map(raw.map((t) => [Number(t?.minQty), t]));
+  return PRICE_TIER_PRESETS.map((preset) => {
+    const existing = byQty.get(preset.minQty);
+    const amount = existing?.amount !== undefined && existing?.amount !== null && existing?.amount !== ""
+      ? Number(existing.amount)
+      : "";
+    return {
+      minQty: preset.minQty,
+      label: typeof existing?.label === "string" && existing.label.trim() ? existing.label : preset.label,
+      amount: Number.isFinite(amount) ? amount : "",
+      showOnStorefront: Boolean(existing?.showOnStorefront),
+    };
+  });
+}
+
+function normalizeProduct(product) {
+  const tiers = normalizePriceTiers(product?.priceTiers);
+  const legacyPrice = Number(product?.price);
+  if ((!product?.priceTiers || !Array.isArray(product.priceTiers)) && Number.isFinite(legacyPrice) && legacyPrice > 0) {
+    tiers[0] = { ...tiers[0], amount: legacyPrice, showOnStorefront: true };
+  }
+  const primary = pickPrimaryPrice(tiers, legacyPrice);
+  return { ...product, priceTiers: tiers, price: primary };
+}
+
+function pickPrimaryPrice(tiers, legacyPrice) {
+  const visible = tiers.filter((t) => t.showOnStorefront && Number(t.amount) > 0);
+  if (visible.length > 0) return Number(visible[0].amount);
+  const any = tiers.map((t) => Number(t.amount)).find((n) => Number.isFinite(n) && n > 0);
+  if (any) return any;
+  return Number.isFinite(legacyPrice) ? legacyPrice : 0;
+}
+
+function serializePriceTiersForApi(tiers) {
+  return normalizePriceTiers(tiers).map((t) => ({
+    minQty: t.minQty,
+    label: t.label,
+    amount: t.amount === "" ? null : Number(t.amount),
+    showOnStorefront: Boolean(t.showOnStorefront),
+  }));
+}
+
 function App() {
   const [products, setProducts] = useState([]);
   const [username, setUsername] = useState("");
@@ -13,7 +72,7 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
 
   const [newName, setNewName] = useState("");
-  const [newPrice, setNewPrice] = useState("");
+  const [newPriceTiers, setNewPriceTiers] = useState(() => defaultPriceTiers());
   const [newProductFile, setNewProductFile] = useState(null);
   const [newImagePreview, setNewImagePreview] = useState("");
   const [newSizes, setNewSizes] = useState([]);
@@ -29,7 +88,10 @@ function App() {
     (async () => {
       try {
         const data = await getProducts();
-        if (!cancelled) setProducts(Array.isArray(data) ? data : []);
+        if (!cancelled) {
+          const list = Array.isArray(data) ? data : [];
+          setProducts(list.map(normalizeProduct));
+        }
       } catch (error) {
         console.error("Falha ao carregar produtos do servidor:", error);
         if (!cancelled) setProducts([]);
@@ -44,20 +106,23 @@ function App() {
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  async function updateProduct(id, changes) {
-    setProducts((prev) =>
-      prev.map((product) => (product.id === id ? { ...product, ...changes } : product))
-    );
+  async function updateProduct(id, changes, options = {}) {
+    const { skipOptimistic = false } = options;
+    if (!skipOptimistic) {
+      setProducts((prev) =>
+        prev.map((product) => (product.id === id ? normalizeProduct({ ...product, ...changes }) : product))
+      );
+    }
     try {
       const saved = await apiUpdateProduct(id, changes);
       setProducts((prev) =>
-        prev.map((product) => (product.id === id ? { ...product, ...saved } : product))
+        prev.map((product) => (product.id === id ? normalizeProduct({ ...product, ...saved }) : product))
       );
     } catch (error) {
       console.error("Falha ao salvar alterações no servidor:", error);
       setProductError(`Falha ao salvar no servidor: ${error.message}`);
       const refreshed = await getProducts().catch(() => null);
-      if (Array.isArray(refreshed)) setProducts(refreshed);
+      if (Array.isArray(refreshed)) setProducts(refreshed.map(normalizeProduct));
     }
   }
 
@@ -69,7 +134,7 @@ function App() {
       console.error("Falha ao excluir no servidor:", error);
       setProductError(`Falha ao excluir no servidor: ${error.message}`);
       const refreshed = await getProducts().catch(() => null);
-      if (Array.isArray(refreshed)) setProducts(refreshed);
+      if (Array.isArray(refreshed)) setProducts(refreshed.map(normalizeProduct));
     }
   }
 
@@ -130,12 +195,6 @@ function App() {
     setPassword("");
   }
 
-  function handleProductPriceChange(id, value) {
-    const price = Number(value);
-    if (Number.isNaN(price)) return;
-    updateProduct(id, { price });
-  }
-
   function toggleProductSize(product, size) {
     const current = Array.isArray(product.sizes) ? product.sizes : [];
     const next = current.includes(size)
@@ -146,6 +205,35 @@ function App() {
 
   function toggleNewSize(size) {
     setNewSizes((prev) => (prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]));
+  }
+
+  function updateProductTier(productId, minQty, patch) {
+    let nextPayload = null;
+
+    setProducts((prev) =>
+      prev.map((product) => {
+        if (product.id !== productId) return product;
+        const tiers = normalizePriceTiers(product.priceTiers).map((t) =>
+          t.minQty === minQty ? { ...t, ...patch } : t
+        );
+        const nextProduct = normalizeProduct({ ...product, priceTiers: tiers });
+        nextPayload = {
+          priceTiers: serializePriceTiersForApi(nextProduct.priceTiers),
+          price: nextProduct.price,
+        };
+        return nextProduct;
+      })
+    );
+
+    if (nextPayload) {
+      void updateProduct(productId, nextPayload, { skipOptimistic: true });
+    }
+  }
+
+  function updateNewTier(minQty, patch) {
+    setNewPriceTiers((prev) =>
+      normalizePriceTiers(prev).map((t) => (t.minQty === minQty ? { ...t, ...patch } : t))
+    );
   }
 
   function handleImageUpload(id, file) {
@@ -188,8 +276,17 @@ function App() {
   async function addNewProduct(event) {
     event.preventDefault();
 
-    if (!newName || !newPrice || !newProductFile || !newImagePreview) {
-      setProductError("Preencha nome, preço e selecione uma imagem antes de adicionar.");
+    if (!newName || !newProductFile || !newImagePreview) {
+      setProductError("Preencha nome e selecione uma imagem antes de adicionar.");
+      return;
+    }
+
+    const tiersForSave = serializePriceTiersForApi(newPriceTiers);
+    const hasVisiblePrice = tiersForSave.some(
+      (t) => t.showOnStorefront && t.amount !== null && Number(t.amount) > 0
+    );
+    if (!hasVisiblePrice) {
+      setProductError("Marque e informe pelo menos um preço visível na vitrine (10, 50 ou 100 peças).");
       return;
     }
 
@@ -202,19 +299,21 @@ function App() {
       if (!imageUrl) throw new Error("Servidor não retornou a URL da imagem");
       
       const nextId = Math.max(0, ...products.map((product) => product.id)) + 1;
+      const normalizedTiers = normalizePriceTiers(tiersForSave);
       const newProduct = {
         id: nextId,
         name: newName,
-        price: Number(newPrice),
+        price: pickPrimaryPrice(normalizedTiers, 0),
         image: imageUrl,
         sizes: newSizes,
+        priceTiers: tiersForSave,
       };
 
       const created = await createProduct(newProduct);
-      setProducts((prev) => [...prev, created]);
+      setProducts((prev) => [...prev, normalizeProduct(created)]);
       
       setNewName("");
-      setNewPrice("");
+      setNewPriceTiers(defaultPriceTiers());
       setNewProductFile(null);
       setNewImagePreview("");
       setNewSizes([]);
@@ -360,16 +459,53 @@ function App() {
                     alt={product.name}
                     className="admin-card-image"
                   />
-                  <label className="form-label">
-                    Preço (R$)
-                    <input
-                      className="input-field"
-                      type="number"
-                      step="0.01"
-                      value={product.price}
-                      onChange={(event) => handleProductPriceChange(product.id, event.target.value)}
-                    />
-                  </label>
+                  <div className="form-label">
+                    Preços por quantidade
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                      {normalizePriceTiers(product.priceTiers).map((tier) => (
+                        <div
+                          key={tier.minQty}
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 10,
+                            alignItems: "center",
+                            border: "1px solid rgba(0,0,0,0.08)",
+                            borderRadius: 8,
+                            padding: "8px 10px",
+                          }}
+                        >
+                          <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 160 }}>
+                            <input
+                              type="checkbox"
+                              checked={tier.showOnStorefront}
+                              onChange={(e) =>
+                                updateProductTier(product.id, tier.minQty, { showOnStorefront: e.target.checked })
+                              }
+                            />
+                            Mostrar na vitrine
+                          </label>
+                          <span style={{ fontWeight: 600, minWidth: 140 }}>{tier.label}</span>
+                          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            R$
+                            <input
+                              className="input-field"
+                              style={{ width: 110 }}
+                              type="number"
+                              step="0.01"
+                              value={tier.amount === "" ? "" : tier.amount}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                updateProductTier(product.id, tier.minQty, {
+                                  amount: v === "" ? "" : Number(v),
+                                });
+                              }}
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                   <div className="form-label">
                     Tamanhos disponíveis
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
@@ -417,16 +553,51 @@ function App() {
                     placeholder="Ex: Mochila premium"
                   />
                 </label>
-                <label className="form-label">
-                  Preço (R$)
-                  <input
-                    className="input-field"
-                    type="number"
-                    step="0.01"
-                    value={newPrice}
-                    onChange={(event) => setNewPrice(event.target.value)}
-                  />
-                </label>
+                <div className="form-label">
+                  Preços por quantidade
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                    {normalizePriceTiers(newPriceTiers).map((tier) => (
+                      <div
+                        key={tier.minQty}
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 10,
+                          alignItems: "center",
+                          border: "1px solid rgba(0,0,0,0.08)",
+                          borderRadius: 8,
+                          padding: "8px 10px",
+                        }}
+                      >
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 160 }}>
+                          <input
+                            type="checkbox"
+                            checked={tier.showOnStorefront}
+                            onChange={(e) =>
+                              updateNewTier(tier.minQty, { showOnStorefront: e.target.checked })
+                            }
+                          />
+                          Mostrar na vitrine
+                        </label>
+                        <span style={{ fontWeight: 600, minWidth: 140 }}>{tier.label}</span>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          R$
+                          <input
+                            className="input-field"
+                            style={{ width: 110 }}
+                            type="number"
+                            step="0.01"
+                            value={tier.amount === "" ? "" : tier.amount}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              updateNewTier(tier.minQty, { amount: v === "" ? "" : Number(v) });
+                            }}
+                          />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <div className="form-label">
                   Tamanhos disponíveis
                   <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>

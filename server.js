@@ -114,6 +114,46 @@ function imageTypeToExt(mime) {
   }
 }
 
+const PRICE_TIER_PRESETS = [
+  { minQty: 10, label: "A partir de 10 peças" },
+  { minQty: 50, label: "A partir de 50 peças" },
+  { minQty: 100, label: "A partir de 100 peças" },
+];
+
+function sanitizePriceTiers(input) {
+  const byQty = new Map(
+    Array.isArray(input) ? input.map((t) => [Number(t?.minQty), t]) : []
+  );
+
+  return PRICE_TIER_PRESETS.map((preset) => {
+    const existing = byQty.get(preset.minQty);
+    const rawAmount = existing?.amount;
+    const amount =
+      rawAmount === undefined || rawAmount === null || rawAmount === ""
+        ? null
+        : Number(rawAmount);
+
+    return {
+      minQty: preset.minQty,
+      label:
+        typeof existing?.label === "string" && existing.label.trim()
+          ? existing.label
+          : preset.label,
+      amount: Number.isFinite(amount) ? amount : null,
+      showOnStorefront: Boolean(existing?.showOnStorefront),
+    };
+  });
+}
+
+function pickPrimaryPriceFromTiers(tiers, legacyPrice) {
+  const visible = tiers.filter((t) => t.showOnStorefront && Number(t.amount) > 0);
+  if (visible.length > 0) return Number(visible[0].amount);
+  const any = tiers.map((t) => Number(t.amount)).find((n) => Number.isFinite(n) && n > 0);
+  if (any) return any;
+  const legacy = Number(legacyPrice);
+  return Number.isFinite(legacy) ? legacy : 0;
+}
+
 app.post("/api/upload", async (req, res) => {
   const { imageDataUrl } = req.body;
   if (!imageDataUrl) {
@@ -184,12 +224,19 @@ app.post("/api/products", async (req, res) => {
     const sizes = Array.isArray(product.sizes)
       ? product.sizes.map(String).filter((s) => ["PP", "P", "M", "G", "GG"].includes(s))
       : [];
+    const priceTiers = sanitizePriceTiers(product.priceTiers);
+    const hasVisiblePrice = priceTiers.some((t) => t.showOnStorefront && Number(t.amount) > 0);
+    if (!hasVisiblePrice) {
+      return res.status(400).json({ error: "Informe pelo menos um preço visível na vitrine" });
+    }
+
     const next = {
       id: Number(product.id),
       name: String(product.name),
-      price: Number(product.price),
+      price: pickPrimaryPriceFromTiers(priceTiers, product.price),
       image: product.image || "",
       sizes,
+      priceTiers,
     };
     await db.collection("products").doc(String(next.id)).set(next);
     res.status(201).json(next);
@@ -226,6 +273,14 @@ app.put("/api/products/:id", async (req, res) => {
     } else {
       next.sizes = Array.isArray(existing.sizes) ? existing.sizes : [];
     }
+
+    if (changes?.priceTiers !== undefined) {
+      next.priceTiers = sanitizePriceTiers(changes.priceTiers);
+    } else {
+      next.priceTiers = sanitizePriceTiers(existing.priceTiers);
+    }
+
+    next.price = pickPrimaryPriceFromTiers(next.priceTiers, next.price ?? existing.price);
 
     await ref.set(next);
     res.json(next);
