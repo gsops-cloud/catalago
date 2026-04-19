@@ -4,6 +4,7 @@ import { getProducts, updateProduct as apiUpdateProduct, createProduct, deletePr
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "1234";
+const AVAILABLE_SIZES = ["PP", "P", "M", "G", "GG"];
 
 function App() {
   const [products, setProducts] = useState([]);
@@ -17,6 +18,7 @@ function App() {
   const [newPrice, setNewPrice] = useState("");
   const [newProductFile, setNewProductFile] = useState(null);
   const [newImagePreview, setNewImagePreview] = useState("");
+  const [newSizes, setNewSizes] = useState([]);
   const [productError, setProductError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
@@ -130,6 +132,18 @@ function App() {
     updateProduct(id, { price });
   }
 
+  function toggleProductSize(product, size) {
+    const current = Array.isArray(product.sizes) ? product.sizes : [];
+    const next = current.includes(size)
+      ? current.filter((s) => s !== size)
+      : [...current, size];
+    updateProduct(product.id, { sizes: next });
+  }
+
+  function toggleNewSize(size) {
+    setNewSizes((prev) => (prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]));
+  }
+
   function handleImageUpload(id, file) {
     if (!file) return;
 
@@ -189,6 +203,7 @@ function App() {
         name: newName,
         price: Number(newPrice),
         image: imageUrl,
+        sizes: newSizes,
       };
 
       const created = await createProduct(newProduct);
@@ -198,6 +213,7 @@ function App() {
       setNewPrice("");
       setNewProductFile(null);
       setNewImagePreview("");
+      setNewSizes([]);
     } catch (error) {
       console.error("Erro ao adicionar produto:", error);
       const errorMsg = error.message || "Erro desconhecido";
@@ -350,6 +366,21 @@ function App() {
                       onChange={(event) => handleProductPriceChange(product.id, event.target.value)}
                     />
                   </label>
+                  <div className="form-label">
+                    Tamanhos disponíveis
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                      {AVAILABLE_SIZES.map((size) => (
+                        <label key={size} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={(Array.isArray(product.sizes) ? product.sizes : []).includes(size)}
+                            onChange={() => toggleProductSize(product, size)}
+                          />
+                          {size}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <label className="form-label">
                     Nova foto
                     <input
@@ -392,6 +423,21 @@ function App() {
                     onChange={(event) => setNewPrice(event.target.value)}
                   />
                 </label>
+                <div className="form-label">
+                  Tamanhos disponíveis
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                    {AVAILABLE_SIZES.map((size) => (
+                      <label key={size} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="checkbox"
+                          checked={newSizes.includes(size)}
+                          onChange={() => toggleNewSize(size)}
+                        />
+                        {size}
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <label className="form-label">
                   Foto do produto
                   <input

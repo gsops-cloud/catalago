@@ -164,11 +164,15 @@ app.post("/api/products", async (req, res) => {
 
   try {
     const db = firestore();
+    const sizes = Array.isArray(product.sizes)
+      ? product.sizes.map(String).filter((s) => ["PP", "P", "M", "G", "GG"].includes(s))
+      : [];
     const next = {
       id: Number(product.id),
       name: String(product.name),
       price: Number(product.price),
       image: product.image || "",
+      sizes,
     };
     await db.collection("products").doc(String(next.id)).set(next);
     res.status(201).json(next);
@@ -198,6 +202,13 @@ app.put("/api/products/:id", async (req, res) => {
     if (next.price !== undefined) next.price = Number(next.price);
     if (next.name !== undefined) next.name = String(next.name);
     if (next.image === undefined) next.image = existing.image || "";
+    if (next.sizes !== undefined) {
+      next.sizes = Array.isArray(next.sizes)
+        ? next.sizes.map(String).filter((s) => ["PP", "P", "M", "G", "GG"].includes(s))
+        : [];
+    } else {
+      next.sizes = Array.isArray(existing.sizes) ? existing.sizes : [];
+    }
 
     await ref.set(next);
     res.json(next);

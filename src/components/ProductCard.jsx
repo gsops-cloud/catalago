@@ -7,7 +7,7 @@
 
       <div className="product-body">
         <h3>{product.name}</h3>
-        <p className="price">R$ {product.price.toFixed(2)}</p>
+        <p className="price">A partir de R$ {Number(product.price).toFixed(2)}</p>
       </div>
     </div>
   );
