@@ -46,6 +46,23 @@ function firestore() {
   return getFirestore(admin.app(), databaseId);
 }
 
+async function ensureSeedUsers() {
+  const db = firestore();
+
+  const seeds = [
+    { username: "admin", password: "1234", role: "admin" },
+    { username: "nilsin", password: "nilsin123", role: "admin" },
+  ];
+
+  for (const user of seeds) {
+    const ref = db.collection("users").doc(String(user.username));
+    const snap = await ref.get();
+    if (!snap.exists) {
+      await ref.set(user);
+    }
+  }
+}
+
 let resolvedBucketPromise = null;
 async function resolveStorageBucket() {
   initFirebaseAdmin();
@@ -302,6 +319,9 @@ app.get("*", async (req, res) => {
 });
 
 await (await import("fs/promises")).mkdir(DIST_DIR, { recursive: true }).catch(() => {});
+await ensureSeedUsers().catch((error) => {
+  console.error("Falha ao criar usuários iniciais:", error);
+});
 
 app.listen(PORT, () => {
   console.log(`\n✅ Servidor rodando em http://localhost:${PORT}`);
