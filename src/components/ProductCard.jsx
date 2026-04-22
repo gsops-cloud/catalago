@@ -1,6 +1,8 @@
-﻿export default function ProductCard({ product }) {
+﻿const brl = (value) =>
+  Number(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+export default function ProductCard({ product }) {
   const sizes = Array.isArray(product?.sizes) ? product.sizes : [];
-  const sizesText = sizes.length > 0 ? `Tamanhos: ${sizes.join(", ")}` : "";
 
   const tiers = Array.isArray(product?.priceTiers)
     ? product.priceTiers
@@ -9,26 +11,39 @@
     : [];
 
   return (
-    <div className="product-card">
-      <div className="product-image">
-        <img src={product.image} alt={product.name} />
+    <article className="product-card">
+      <div className="product-card-media">
+        <img src={product.image} alt={product.name} loading="lazy" decoding="async" />
       </div>
 
-      <div className="product-body">
+      <div className="product-card-body">
         <h3>{product.name}</h3>
-        {sizesText && <p className="sizes">{sizesText}</p>}
-        {tiers.length > 0 ? (
-          tiers.map((tier) => (
-            <p key={tier.minQty} className="price">
-              {tier.label} R$ {Number(tier.amount).toFixed(2)}
-            </p>
-          ))
-        ) : (
-          Number(product.price) > 0 && (
-            <p className="price">A partir de R$ {Number(product.price).toFixed(2)}</p>
-          )
+
+        {sizes.length > 0 && (
+          <ul className="product-sizes" aria-label="Tamanhos disponíveis">
+            {sizes.map((size) => (
+              <li key={size}>
+                <span className="product-size-pill">{size}</span>
+              </li>
+            ))}
+          </ul>
         )}
+
+        <div className="product-pricing">
+          {tiers.length > 0 ? (
+            tiers.map((tier) => (
+              <div key={tier.minQty} className="price-tier">
+                <span className="price-tier-label">{tier.label}</span>
+                <span className="price-tier-value">{brl(tier.amount)}</span>
+              </div>
+            ))
+          ) : (
+            Number(product.price) > 0 && (
+              <p className="price-tier-value-legacy">A partir de {brl(product.price)}</p>
+            )
+          )}
+        </div>
       </div>
-    </div>
+    </article>
   );
 }

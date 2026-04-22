@@ -395,34 +395,42 @@ function App() {
   }
 
   return (
-    <div className="app-container">
+    <div className="site-root">
       <div className="app-container">
         <header className="app-header">
-          <div>
+          <div className="header-intro">
+            <div className="catalog-mark" aria-hidden="true">
+              C
+            </div>
             <p className="eyebrow">Vitrine online</p>
             <h1>Catálogo de produtos</h1>
             <p className="hero-description">
-              Navegue pelos itens disponíveis.
+              Consulte itens, tamanhos e condições por volume. Preços atualizados para sua equipe de compras.
             </p>
           </div>
 
           <div className="header-actions">
             <div className="search-container">
               <input
-                type="text"
-                placeholder="Buscar produtos..."
+                type="search"
+                placeholder="Buscar por nome..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="search-input"
+                aria-label="Buscar produtos"
               />
             </div>
-            {isAdmin && <span className="admin-chip">Administrador conectado</span>}
+            {isAdmin && (
+              <span className="admin-chip" title="Sessão administrativa ativa">
+                Administrador
+              </span>
+            )}
             <button
               type="button"
-              className="button button-primary"
+              className={isAdmin ? "button button-secondary" : "button button-primary"}
               onClick={isAdmin ? handleLogout : handleAdminClick}
             >
-              {isAdmin ? "Sair" : "Administrador"}
+              {isAdmin ? "Sair" : "Área administrativa"}
             </button>
           </div>
         </header>
@@ -491,7 +499,9 @@ function App() {
                   ×
                 </button>
               </div>
-              <p>Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.</p>
+              <p className="modal-body-text">
+                Tem certeza de que deseja excluir este produto? Esta ação não pode ser desfeita.
+              </p>
               <div className="modal-actions">
                 <button className="button button-secondary" onClick={handleDeleteCancel}>
                   Cancelar
@@ -504,12 +514,13 @@ function App() {
           </div>
         )}
 
+        <main className="app-main">
         {isAdmin && (
           <section className="admin-panel">
             <div className="admin-panel-grid">
               <div>
                 <h2>Painel do administrador</h2>
-                <p>
+                <p className="admin-panel-lead">
                   Edite preços e tamanhos abaixo e use o botão Salvar alterações para gravar no servidor. O
                   envio de uma nova foto continua sendo salvo na hora.
                 </p>
@@ -552,21 +563,10 @@ function App() {
                   />
                   <div className="form-label">
                     Preços por quantidade
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                    <div className="admin-tier-stack">
                       {normalizePriceTiers(product.priceTiers).map((tier) => (
-                        <div
-                          key={tier.minQty}
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 10,
-                            alignItems: "center",
-                            border: "1px solid rgba(0,0,0,0.08)",
-                            borderRadius: 8,
-                            padding: "8px 10px",
-                          }}
-                        >
-                          <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 160 }}>
+                        <div key={tier.minQty} className="admin-tier-row">
+                          <label style={{ minWidth: 160 }}>
                             <input
                               type="checkbox"
                               checked={tier.showOnStorefront}
@@ -576,8 +576,8 @@ function App() {
                             />
                             Mostrar na vitrine
                           </label>
-                          <span style={{ fontWeight: 600, minWidth: 140 }}>{tier.label}</span>
-                          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span className="admin-tier-row-label">{tier.label}</span>
+                          <label>
                             R$
                             <input
                               className="input-field"
@@ -599,9 +599,9 @@ function App() {
                   </div>
                   <div className="form-label">
                     Tamanhos disponíveis
-                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                    <div className="admin-size-row">
                       {AVAILABLE_SIZES.map((size) => (
-                        <label key={size} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <label key={size}>
                           <input
                             type="checkbox"
                             checked={(Array.isArray(product.sizes) ? product.sizes : []).includes(size)}
@@ -646,21 +646,10 @@ function App() {
                 </label>
                 <div className="form-label">
                   Preços por quantidade
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                  <div className="admin-tier-stack">
                     {normalizePriceTiers(newPriceTiers).map((tier) => (
-                      <div
-                        key={tier.minQty}
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 10,
-                          alignItems: "center",
-                          border: "1px solid rgba(0,0,0,0.08)",
-                          borderRadius: 8,
-                          padding: "8px 10px",
-                        }}
-                      >
-                        <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 160 }}>
+                      <div key={tier.minQty} className="admin-tier-row">
+                        <label style={{ minWidth: 160 }}>
                           <input
                             type="checkbox"
                             checked={tier.showOnStorefront}
@@ -670,8 +659,8 @@ function App() {
                           />
                           Mostrar na vitrine
                         </label>
-                        <span style={{ fontWeight: 600, minWidth: 140 }}>{tier.label}</span>
-                        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span className="admin-tier-row-label">{tier.label}</span>
+                        <label>
                           R$
                           <input
                             className="input-field"
@@ -691,9 +680,9 @@ function App() {
                 </div>
                 <div className="form-label">
                   Tamanhos disponíveis
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                  <div className="admin-size-row">
                     {AVAILABLE_SIZES.map((size) => (
-                      <label key={size} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <label key={size}>
                         <input
                           type="checkbox"
                           checked={newSizes.includes(size)}
@@ -725,19 +714,22 @@ function App() {
           </section>
         )}
 
-        <section className="products-section">
-          <div className="products-grid">
-            {filteredProducts.map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-              />
-            ))}
-            {filteredProducts.length === 0 && searchTerm && (
-              <p className="no-results">Nenhum produto encontrado para "{searchTerm}"</p>
-            )}
-          </div>
-        </section>
+          <section className="products-section" aria-labelledby="catalog-heading">
+            <div>
+              <h2 id="catalog-heading" className="section-heading">
+                Catálogo
+              </h2>
+              <div className="products-grid">
+                {filteredProducts.map((p) => (
+                  <ProductCard key={p.id} product={p} />
+                ))}
+                {filteredProducts.length === 0 && searchTerm && (
+                  <p className="no-results">Nenhum produto encontrado para &quot;{searchTerm}&quot;.</p>
+                )}
+              </div>
+            </div>
+          </section>
+        </main>
       </div>
     </div>
   );
