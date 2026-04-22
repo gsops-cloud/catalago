@@ -214,10 +214,26 @@ button {
 
 .admin-panel-grid {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 28px;
+}
+
+.admin-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.admin-unsaved-hint {
+  margin: 8px 0 0;
+  color: #b45309;
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 
 .admin-panel h2 {
@@ -280,6 +296,12 @@ button {
 .form-error {
   color: #dc2626;
   margin: 0;
+}
+
+.form-success {
+  color: #15803d;
+  margin: 8px 0 0;
+  font-weight: 600;
 }
 
 .modal-overlay {
@@ -348,6 +370,15 @@ button {
   .admin-panel-grid {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .admin-panel-actions {
+    justify-content: stretch;
+  }
+
+  .admin-panel-actions .button {
+    flex: 1;
+    min-width: 0;
   }
 }
 

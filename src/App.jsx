@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import ProductCard from "./components/ProductCard";
 import { getProducts, updateProduct as apiUpdateProduct, createProduct, deleteProduct as apiDeleteProduct, uploadImage, login as apiLogin } from "./services/api";
 
@@ -83,6 +83,15 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
 
+  const [dirtyProductIds, setDirtyProductIds] = useState(() => new Set());
+  const [isSavingCatalog, setIsSavingCatalog] = useState(false);
+  const [saveCatalogMessage, setSaveCatalogMessage] = useState("");
+  const productsRef = useRef([]);
+
+  useEffect(() => {
+    productsRef.current = products;
+  }, [products]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -127,6 +136,11 @@ function App() {
   }
 
   async function deleteProduct(id) {
+    setDirtyProductIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setProducts((prev) => prev.filter((product) => product.id !== id));
     try {
       await apiDeleteProduct(id);
@@ -181,6 +195,67 @@ function App() {
     setIsAdmin(false);
     setShowLogin(false);
     setLoginError("");
+    setDirtyProductIds(new Set());
+    setSaveCatalogMessage("");
+  }
+
+  function markProductDirty(productId) {
+    setDirtyProductIds((prev) => new Set(prev).add(productId));
+    setSaveCatalogMessage("");
+  }
+
+  async function saveCatalogChanges() {
+    const ids = [...dirtyProductIds];
+    if (ids.length === 0 || isSavingCatalog) return;
+
+    setIsSavingCatalog(true);
+    setProductError("");
+    setSaveCatalogMessage("");
+
+    const idsToClearFromDirty = [];
+    const failed = [];
+    let savedOnServer = 0;
+
+    for (const id of ids) {
+      const product = productsRef.current.find((p) => p.id === id);
+      if (!product) {
+        idsToClearFromDirty.push(id);
+        continue;
+      }
+      const normalized = normalizeProduct(product);
+      const payload = {
+        priceTiers: serializePriceTiersForApi(normalized.priceTiers),
+        price: normalized.price,
+        sizes: Array.isArray(normalized.sizes) ? normalized.sizes : [],
+      };
+      try {
+        const saved = await apiUpdateProduct(id, payload);
+        setProducts((prev) =>
+          prev.map((p) => (p.id === id ? normalizeProduct({ ...p, ...saved }) : p))
+        );
+        idsToClearFromDirty.push(id);
+        savedOnServer += 1;
+      } catch (error) {
+        console.error("Falha ao salvar produto:", id, error);
+        failed.push(id);
+      }
+    }
+
+    setDirtyProductIds((prev) => {
+      const next = new Set(prev);
+      for (const id of idsToClearFromDirty) next.delete(id);
+      return next;
+    });
+
+    if (failed.length > 0) {
+      setProductError(
+        `Não foi possível salvar ${failed.length} produto(s). Verifique a conexão e tente de novo.`
+      );
+    } else if (savedOnServer > 0) {
+      setSaveCatalogMessage("Alterações salvas com sucesso.");
+    }
+
+    setIsSavingCatalog(false);
   }
 
   function handleAdminClick() {
@@ -200,7 +275,10 @@ function App() {
     const next = current.includes(size)
       ? current.filter((s) => s !== size)
       : [...current, size];
-    updateProduct(product.id, { sizes: next });
+    setProducts((prev) =>
+      prev.map((p) => (p.id === product.id ? normalizeProduct({ ...p, sizes: next }) : p))
+    );
+    markProductDirty(product.id);
   }
 
   function toggleNewSize(size) {
@@ -208,26 +286,16 @@ function App() {
   }
 
   function updateProductTier(productId, minQty, patch) {
-    let nextPayload = null;
-
     setProducts((prev) =>
       prev.map((product) => {
         if (product.id !== productId) return product;
         const tiers = normalizePriceTiers(product.priceTiers).map((t) =>
           t.minQty === minQty ? { ...t, ...patch } : t
         );
-        const nextProduct = normalizeProduct({ ...product, priceTiers: tiers });
-        nextPayload = {
-          priceTiers: serializePriceTiersForApi(nextProduct.priceTiers),
-          price: nextProduct.price,
-        };
-        return nextProduct;
+        return normalizeProduct({ ...product, priceTiers: tiers });
       })
     );
-
-    if (nextPayload) {
-      void updateProduct(productId, nextPayload, { skipOptimistic: true });
-    }
+    markProductDirty(productId);
   }
 
   function updateNewTier(minQty, patch) {
@@ -442,12 +510,35 @@ function App() {
               <div>
                 <h2>Painel do administrador</h2>
                 <p>
-                  Faça edições no catálogo, altere preços e adicione produtos com foto diretamente aqui.
+                  Edite preços e tamanhos abaixo e use o botão Salvar alterações para gravar no servidor. O
+                  envio de uma nova foto continua sendo salvo na hora.
                 </p>
+                {dirtyProductIds.size > 0 && (
+                  <p className="admin-unsaved-hint" role="status">
+                    {dirtyProductIds.size === 1
+                      ? "Há alterações não salvas em 1 produto."
+                      : `Há alterações não salvas em ${dirtyProductIds.size} produtos.`}
+                  </p>
+                )}
+                {saveCatalogMessage && (
+                  <p className="form-success" role="status">
+                    {saveCatalogMessage}
+                  </p>
+                )}
               </div>
-              <button type="button" className="button button-secondary" onClick={handleLogout}>
-                Sair do administrador
-              </button>
+              <div className="admin-panel-actions">
+                <button
+                  type="button"
+                  className="button button-primary"
+                  onClick={() => void saveCatalogChanges()}
+                  disabled={dirtyProductIds.size === 0 || isSavingCatalog}
+                >
+                  {isSavingCatalog ? "Salvando…" : "Salvar alterações"}
+                </button>
+                <button type="button" className="button button-secondary" onClick={handleLogout}>
+                  Sair do administrador
+                </button>
+              </div>
             </div>
 
             <div className="admin-grid">
