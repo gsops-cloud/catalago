@@ -154,6 +154,19 @@ function pickPrimaryPriceFromTiers(tiers, legacyPrice) {
   return Number.isFinite(legacy) ? legacy : 0;
 }
 
+const ALLOWED_PRODUCT_CATEGORIES = new Set(["camisa", "bermuda"]);
+
+function sanitizeCategory(input) {
+  const s = String(input ?? "")
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (ALLOWED_PRODUCT_CATEGORIES.has(s)) return s;
+  if (s === "bermudas") return "bermuda";
+  return "camisa";
+}
+
 app.post("/api/upload", async (req, res) => {
   const { imageDataUrl } = req.body;
   if (!imageDataUrl) {
@@ -233,6 +246,7 @@ app.post("/api/products", async (req, res) => {
     const next = {
       id: Number(product.id),
       name: String(product.name),
+      category: sanitizeCategory(product.category),
       price: pickPrimaryPriceFromTiers(priceTiers, product.price),
       image: product.image || "",
       sizes,
@@ -281,6 +295,7 @@ app.put("/api/products/:id", async (req, res) => {
     }
 
     next.price = pickPrimaryPriceFromTiers(next.priceTiers, next.price ?? existing.price);
+    next.category = sanitizeCategory(next.category ?? existing.category);
 
     await ref.set(next);
     res.json(next);

@@ -1,8 +1,29 @@
-﻿import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef, useMemo } from "react";
 import ProductCard from "./components/ProductCard";
 import { getProducts, updateProduct as apiUpdateProduct, createProduct, deleteProduct as apiDeleteProduct, uploadImage, login as apiLogin } from "./services/api";
 
 const AVAILABLE_SIZES = ["PP", "P", "M", "G", "GG"];
+
+/** Ordem na vitrine: primeiro camisas, depois bermudas. */
+const PRODUCT_CATEGORY_ORDER = ["camisa", "bermuda"];
+const PRODUCT_CATEGORIES = [
+  { id: "camisa", label: "Camisa" },
+  { id: "bermuda", label: "Bermuda" },
+];
+const CATEGORY_SECTION_TITLE = {
+  camisa: "Camisas",
+  bermuda: "Bermudas",
+};
+
+function normalizeCategory(raw) {
+  const s = String(raw ?? "")
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (s === "bermuda" || s === "bermudas") return "bermuda";
+  return "camisa";
+}
 
 const PRICE_TIER_PRESETS = [
   { minQty: 10, label: "A partir de 10 peças" },
@@ -43,7 +64,7 @@ function normalizeProduct(product) {
     tiers[0] = { ...tiers[0], amount: legacyPrice, showOnStorefront: true };
   }
   const primary = pickPrimaryPrice(tiers, legacyPrice);
-  return { ...product, priceTiers: tiers, price: primary };
+  return { ...product, category: normalizeCategory(product?.category), priceTiers: tiers, price: primary };
 }
 
 function pickPrimaryPrice(tiers, legacyPrice) {
@@ -72,6 +93,7 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
 
   const [newName, setNewName] = useState("");
+  const [newCategory, setNewCategory] = useState("camisa");
   const [newPriceTiers, setNewPriceTiers] = useState(() => defaultPriceTiers());
   const [newProductFile, setNewProductFile] = useState(null);
   const [newImagePreview, setNewImagePreview] = useState("");
@@ -111,9 +133,35 @@ function App() {
     };
   }, []);
 
-  const filteredProducts = products.filter(product =>
+  const filteredProducts = products.filter((product) =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const catalogByCategory = useMemo(() => {
+    const buckets = new Map(PRODUCT_CATEGORY_ORDER.map((id) => [id, []]));
+    for (const p of filteredProducts) {
+      const id = normalizeCategory(p.category);
+      if (!buckets.has(id)) buckets.set(id, []);
+      buckets.get(id).push(p);
+    }
+    return PRODUCT_CATEGORY_ORDER.map((id) => ({
+      id,
+      title: CATEGORY_SECTION_TITLE[id],
+      items: buckets.get(id) ?? [],
+    }));
+  }, [filteredProducts]);
+
+  const adminProductsSorted = useMemo(() => {
+    const orderIndex = (id) => {
+      const i = PRODUCT_CATEGORY_ORDER.indexOf(normalizeCategory(id));
+      return i === -1 ? PRODUCT_CATEGORY_ORDER.length : i;
+    };
+    return [...products].sort((a, b) => {
+      const d = orderIndex(a.category) - orderIndex(b.category);
+      if (d !== 0) return d;
+      return Number(a.id) - Number(b.id);
+    });
+  }, [products]);
 
   async function updateProduct(id, changes, options = {}) {
     const { skipOptimistic = false } = options;
@@ -227,6 +275,7 @@ function App() {
         priceTiers: serializePriceTiersForApi(normalized.priceTiers),
         price: normalized.price,
         sizes: Array.isArray(normalized.sizes) ? normalized.sizes : [],
+        category: normalizeCategory(normalized.category),
       };
       try {
         const saved = await apiUpdateProduct(id, payload);
@@ -283,6 +332,14 @@ function App() {
 
   function toggleNewSize(size) {
     setNewSizes((prev) => (prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]));
+  }
+
+  function setProductCategory(product, categoryId) {
+    const cat = normalizeCategory(categoryId);
+    setProducts((prev) =>
+      prev.map((p) => (p.id === product.id ? normalizeProduct({ ...p, category: cat }) : p))
+    );
+    markProductDirty(product.id);
   }
 
   function updateProductTier(productId, minQty, patch) {
@@ -371,6 +428,7 @@ function App() {
       const newProduct = {
         id: nextId,
         name: newName,
+        category: normalizeCategory(newCategory),
         price: pickPrimaryPrice(normalizedTiers, 0),
         image: imageUrl,
         sizes: newSizes,
@@ -381,6 +439,7 @@ function App() {
       setProducts((prev) => [...prev, normalizeProduct(created)]);
       
       setNewName("");
+      setNewCategory("camisa");
       setNewPriceTiers(defaultPriceTiers());
       setNewProductFile(null);
       setNewImagePreview("");
@@ -553,9 +612,23 @@ function App() {
             </div>
 
             <div className="admin-grid">
-              {products.map((product) => (
+              {adminProductsSorted.map((product) => (
                 <div key={product.id} className="admin-card">
                   <h3>{product.name}</h3>
+                  <label className="form-label">
+                    Categoria
+                    <select
+                      className="input-field"
+                      value={normalizeCategory(product.category)}
+                      onChange={(e) => setProductCategory(product, e.target.value)}
+                    >
+                      {PRODUCT_CATEGORIES.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <img
                     src={product.image}
                     alt={product.name}
@@ -635,6 +708,21 @@ function App() {
             <form className="admin-form" onSubmit={addNewProduct}>
               <h3>Adicionar novo produto</h3>
               <div className="form-grid">
+                <label className="form-label">
+                  Categoria do novo item
+                  <select
+                    className="input-field"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(normalizeCategory(e.target.value))}
+                    aria-label="Categoria do novo produto"
+                  >
+                    {PRODUCT_CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="form-label">
                   Nome do produto
                   <input
@@ -719,14 +807,23 @@ function App() {
               <h2 id="catalog-heading" className="section-heading">
                 Catálogo
               </h2>
-              <div className="products-grid">
-                {filteredProducts.map((p) => (
-                  <ProductCard key={p.id} product={p} />
-                ))}
-                {filteredProducts.length === 0 && searchTerm && (
-                  <p className="no-results">Nenhum produto encontrado para &quot;{searchTerm}&quot;.</p>
-                )}
-              </div>
+              {filteredProducts.length === 0 && searchTerm ? (
+                <p className="no-results">Nenhum produto encontrado para &quot;{searchTerm}&quot;.</p>
+              ) : (
+                catalogByCategory.map(
+                  ({ id, title, items }) =>
+                    items.length > 0 && (
+                      <div key={id} className="catalog-category-block">
+                        <h3 className="catalog-category-title">{title}</h3>
+                        <div className="products-grid">
+                          {items.map((p) => (
+                            <ProductCard key={p.id} product={p} />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                )
+              )}
             </div>
           </section>
         </main>
